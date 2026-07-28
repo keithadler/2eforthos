@@ -48,25 +48,24 @@ D2Q7H    = D2BASE+15            ; write mode
 ; would cost far more than it saves.
 ; ---------------------------------------------------------------------------
 ; The drive spins down on its own when nothing has touched it for a while, so
-; a caller returning after a pause finds it stopped.  Reading during spin-up
-; returns noise, which is what the address field guards above are for; this
-; just shortens the window by always giving it a moment.
+; a caller returning after a pause finds it stopped and reading returns noise.
+; That is handled by validating address fields and letting the search budget
+; run, not by waiting: a fixed delay here is charged to every sector, and the
+; loader reads seventy-four of them back to back.  Fifty milliseconds of it
+; was longer than the gap to the next sector, so every read missed and cost a
+; whole revolution instead.
 D2MotorOn:
         lda     D2DRV1
         lda     D2MOTON
         lda     D2MOTRUN
-        bne     @brief
+        bne     @running
         lda     #1
         sta     D2MOTRUN
-        ldy     #200                    ; ~1s from cold
+        ldy     #200                    ; ~1s, from cold only
 @wait:  jsr     D2Delay
         dey
         bne     @wait
-        rts
-@brief: ldy     #40                     ; ~200ms otherwise
-@wait2: jsr     D2Delay
-        dey
-        bne     @wait2
+@running:
         rts
 
 D2MotorOff:

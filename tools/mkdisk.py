@@ -12,7 +12,7 @@ written in each address field.  DOS's skew maps between the two, so a chunk
 destined for physical sector P is written at logical position SKEW[P].  Get
 this wrong and every sector still reads back cleanly, just in the wrong order.
 
-    python3 tools/mkdisk.py disk.dsk boot1.bin forth.bin
+    python3 tools/mkdisk.py disk.dsk boot1.bin forth.bin [interleave]
 """
 
 import pathlib
@@ -39,11 +39,19 @@ def mark_used(img, track):
     img[off + 1] = 0
 
 
-def lay(img, image_bytes, track, label):
-    """Write a whole image from sector 0 of `track` onward."""
+def lay(img, image_bytes, track, label, interleave=1):
+    """Write a whole image from `track` onward.
+
+    interleave is the step the reader takes between successive sectors.  The
+    boot loader reads the kernel three apart, because decoding a sector takes
+    longer than the gap to the next one; consecutive placement would cost a
+    whole revolution per sector.  The PROM reads the boot block itself
+    consecutively, so that one stays at interleave 1.
+    """
     chunks = [image_bytes[i:i + SECTOR] for i in range(0, len(image_bytes), SECTOR)]
     for index, chunk in enumerate(chunks):
-        put(img, track + index // SECTORS, index % SECTORS, chunk)
+        within = index % SECTORS
+        put(img, track + index // SECTORS, (within * interleave) % SECTORS, chunk)
     last = track + (len(chunks) - 1) // SECTORS
     for t in range(track, last + 1):
         mark_used(img, t)
@@ -52,7 +60,7 @@ def lay(img, image_bytes, track, label):
 
 
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) not in (4, 5):
         print(__doc__)
         return 2
     disk = pathlib.Path(argv[1])
@@ -64,7 +72,8 @@ def main(argv):
     boot = pathlib.Path(argv[2]).read_bytes()
     lay(img, boot, 0, "boot loader")
     kernel = pathlib.Path(argv[3]).read_bytes()
-    lay(img, kernel, 1, "kernel")
+    step = int(argv[4]) if len(argv) == 5 else 3
+    lay(img, kernel, 1, "kernel", interleave=step)
 
     disk.write_bytes(bytes(img))
     return 0
