@@ -54,6 +54,7 @@ ColdStart:
 .include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
+.include "gfx.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
