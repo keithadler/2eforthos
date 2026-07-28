@@ -38,6 +38,7 @@ ColdStart:
         sta     TMP2+1
         jsr     PutStr
         jsr     BuildIndex              ; hash the built-in dictionary
+        jsr     D2BuildTable            ; invert the 6-and-2 nibble table
         lda     #<BOOTSRC               ; the interpreter reads this first,
         sta     SRC                     ; then switches to the keyboard
         lda     #>BOOTSRC
@@ -50,6 +51,7 @@ ColdStart:
 .include "gwords.inc"
 .include "pointer.inc"
 .include "disk.inc"
+.include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
 
