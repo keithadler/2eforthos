@@ -5,9 +5,9 @@
 ; Memory map once BRUN from DOS 3.3:
 ;
 ;   $0800-$0FFF   one raw disk sector
-;   $1000-$1FFF   the parsed catalog, 32 bytes per file
-;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main are
-';                 interleaved byte by byte to make 560 pixels per row
+;   $1000-$1FFF   the parsed catalog, 36 bytes per file
+;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main interleave
+;                 byte by byte to make 560 pixels per row
 ;   $4000-....    this kernel, then the dictionary growing upward.  Page 2
 ;                 of hi-res used to live at $4000; the OS needs the room
 ;                 more than it needs a back buffer.
