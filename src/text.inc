@@ -16,6 +16,13 @@
 
 ; Draw the ASCII character in A at column TCOL, row TROW.
 HgrPutChar:
+        cmp     #'a'            ; the font covers $20-$5F only, so fold lower
+        bcc     @nofold         ; case rather than print it as a blank
+        cmp     #'z'+1
+        bcs     @nofold
+        sec
+        sbc     #$20
+@nofold:
         sec
         sbc     #$20
         cmp     #64
