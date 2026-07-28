@@ -93,6 +93,9 @@ PTMP:    .word  0
 
 RBUF:    .word  0                       ; sector buffer address for RWTS
 
+INBUFSZ = 32                            ; a DOS 3.3 name is 30 characters
+INBUF:   .res   INBUFSZ                 ; ASKLN's private copy of a typed line
+
 ; The two-cell thread DoRun executes: the word asked for, then the primitive
 ; that restores IP and returns to the assembly caller.
 RunSlot: .word  0

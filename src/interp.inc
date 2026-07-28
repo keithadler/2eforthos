@@ -533,6 +533,43 @@ STKSTR: .byte   " STACK?", $0D, $00
         jsr     CComma
         NEXT
 
+; Read a line from the keyboard into a private buffer and return it.
+;
+; GETLN reads into TIB, which is also the outer interpreter's input buffer, so
+; the text is copied straight out to INBUF and TIBLEN/TOIN are left alone.
+; Whatever line invoked this word is still consumed, but nothing aliases.
+        prim    "ASKLN", W_ASKLN, 0     ; -- addr len
+        stx     XSAV
+        jsr     GETLN                   ; length comes back in X
+        stx     TMP1
+        ldx     XSAV
+        lda     TMP1
+        cmp     #INBUFSZ
+        bcc     :+
+        lda     #INBUFSZ-1              ; refuse to overrun the buffer
+        sta     TMP1
+:       ldy     #0
+@copy:  cpy     TMP1
+        beq     @done
+        lda     TIB,y
+        and     #$7F
+        sta     INBUF,y
+        iny
+        bne     @copy
+@done:  dex
+        dex
+        lda     #<INBUF
+        sta     0,x
+        lda     #>INBUF
+        sta     1,x
+        dex
+        dex
+        lda     TMP1
+        sta     0,x
+        lda     #0
+        sta     1,x
+        NEXT
+
         prim    "CMOVE", W_CMOVE, 0     ; src dst count -- (count <= 255)
         lda     4,x
         sta     TMP1
