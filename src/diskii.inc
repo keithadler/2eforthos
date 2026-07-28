@@ -39,18 +39,26 @@ D2Q7L    = D2BASE+14            ; read mode
 ; cold; once running it is left running, because spinning it up per sector
 ; would cost far more than it saves.
 ; ---------------------------------------------------------------------------
+; The drive spins down on its own when nothing has touched it for a while, so
+; a caller returning after a pause finds it stopped.  Reading during spin-up
+; returns noise, which is what the address field guards above are for; this
+; just shortens the window by always giving it a moment.
 D2MotorOn:
         lda     D2DRV1
         lda     D2MOTON
         lda     D2MOTRUN
-        bne     @running
+        bne     @brief
         lda     #1
         sta     D2MOTRUN
-        ldy     #200                    ; ~1s spin-up, only on the first call
+        ldy     #200                    ; ~1s from cold
 @wait:  jsr     D2Delay
         dey
         bne     @wait
-@running:
+        rts
+@brief: ldy     #40                     ; ~200ms otherwise
+@wait2: jsr     D2Delay
+        dey
+        bne     @wait2
         rts
 
 D2MotorOff:
@@ -95,13 +103,21 @@ D2Recal:
         rts
 
 ; Energise the phase for the half track D2CURH now names, then release it.
+;
+; The index is kept in memory, not in X: D2Delay counts down in X, so holding
+; the phase there meant switching on the right magnet and switching off phase
+; zero, leaving magnets latched and the head parked between tracks.  Reads at
+; the position the head happened to start in worked, which is what made this
+; look like a seek problem rather than a register problem.
 D2StepPhase:
         lda     D2CURH
         and     #$03
         asl     a
+        sta     D2PHIDX
         tax
         lda     D2PH0ON,x
         jsr     D2StepDelay
+        ldx     D2PHIDX
         lda     D2PH0OFF,x
         jsr     D2StepDelay
         rts
@@ -144,12 +160,20 @@ D2Read1:
 
 ; Two disk bytes in 4-and-4 form carry one value: odd bits in the first with
 ; ones between them, even bits in the second.
+;
+; The waits are inlined.  A new disk byte arrives every 32 cycles and there is
+; no waiting for it, so a JSR/RTS pair per byte -- twelve cycles of the
+; thirty-two -- is enough to miss one and land in the gap after the field.
+; Buffering the nibbles removed the pressure to *decode* in time; it did not
+; remove the deadline to *sample* in time.
 D2Read44:
-        jsr     D2Read1
+@w1:    lda     D2Q6L
+        bpl     @w1
         sec
         rol     a
         sta     D2T44
-        jsr     D2Read1
+@w2:    lda     D2Q6L
+        bpl     @w2
         and     D2T44
         rts
 
@@ -171,25 +195,38 @@ D2ReadSector:
         sta     D2BUDGET+1              ; than bytes would give up in a
                                         ; fraction of a track, since most
                                         ; bytes are not a prologue.
-@find:  jsr     D2Read1                 ; address field prologue D5 AA 96
+@find:                                  ; address field prologue D5 AA 96
+@f1:    lda     D2Q6L
+        bpl     @f1
         cmp     #$D5
         bne     @spent
-        jsr     D2Read1
+@f2:    lda     D2Q6L
+        bpl     @f2
         cmp     #$AA
         bne     @spent
-        jsr     D2Read1
+@f3:    lda     D2Q6L
+        bpl     @f3
         cmp     #$96
         bne     @spent
         jsr     D2Read44                ; volume, ignored
         jsr     D2Read44
         sta     D2GOTTRK
         jsr     D2Read44
+        cmp     #16                     ; a sector is 0..15 and a track 0..34.
+        bcs     @spent                  ; Anything else means the drive is not
+        pha                             ; yet at speed and we are reading
+        lda     D2GOTTRK                ; noise -- believing it once sent the
+        cmp     #35                     ; head off the end of the disk, because
+        bcs     @nope                   ; @wrongtrack trusted the track number.
+        pla
         cmp     D2SEC
         bne     @spent
         lda     D2GOTTRK
         cmp     D2TRK
         beq     @found
         jmp     @wrongtrack
+@nope:  pla
+        jmp     @spent
 
 @spent: lda     D2BUDGET                ; 16-bit decrement and test
         bne     :+
@@ -206,13 +243,16 @@ D2ReadSector:
         sty     D2CNT                   ; bytes; D5 AA AD
 @data:  dec     D2CNT
         beq     @spent
-        jsr     D2Read1
+@d1:    lda     D2Q6L
+        bpl     @d1
         cmp     #$D5
         bne     @data
-        jsr     D2Read1
+@d2:    lda     D2Q6L
+        bpl     @d2
         cmp     #$AA
         bne     @data
-        jsr     D2Read1
+@d3:    lda     D2Q6L
+        bpl     @d3
         cmp     #$AD
         bne     @data
 
@@ -407,6 +447,115 @@ D2NIBENC:
 ; Forth words, for checking this against RWTS before anything depends on it.
 ; ---------------------------------------------------------------------------
 
+; DBYTES -- the six raw disk bytes after an address prologue, undecoded.
+; If the volume decodes but the sector does not, the fault is either in the
+; 4-and-4 decode or in what is actually on the disk, and only the raw bytes
+; tell the two apart.
+        prim    "DBYTES", W_DBYTES, 0   ; -- b1 b2 b3 b4 b5 b6
+        stx     XSAV
+        jsr     D2MotorOn
+        lda     D2Q7L
+        lda     D2Q6L
+        lda     #<32000
+        sta     D2BUDGET
+        lda     #>32000
+        sta     D2BUDGET+1
+@scan:
+@s1:    lda     D2Q6L
+        bpl     @s1
+        cmp     #$D5
+        bne     @next
+@s2:    lda     D2Q6L
+        bpl     @s2
+        cmp     #$AA
+        bne     @next
+@s3:    lda     D2Q6L
+        bpl     @s3
+        cmp     #$96
+        bne     @next
+        ldy     #0
+@grab:  lda     D2Q6L
+        bpl     @grab
+        sta     D2NIBA,y
+        iny
+        cpy     #6
+        bne     @grab
+        jmp     @done
+@next:  lda     D2BUDGET
+        bne     :+
+        dec     D2BUDGET+1
+:       dec     D2BUDGET
+        lda     D2BUDGET
+        ora     D2BUDGET+1
+        bne     @scan
+        lda     #0                      ; nothing found: report six zeroes
+        ldy     #0
+@zero:  sta     D2NIBA,y
+        iny
+        cpy     #6
+        bne     @zero
+@done:  ldx     XSAV
+        ldy     #6
+@push:  dey
+        dex
+        dex
+        lda     D2NIBA,y
+        sta     0,x
+        lda     #0
+        sta     1,x
+        tya
+        bne     @push
+        NEXT
+
+; DRECAL -- recalibrate to track 0 and say so.  Split out from DSEEK so the
+; two halves of the positioning can be blamed separately.
+        prim    "DRECAL", W_DRECAL, 0
+        stx     XSAV
+        jsr     D2Recal
+        lda     #1
+        sta     D2READY
+        ldx     XSAV
+        NEXT
+
+; DSEEK -- move to a track without reading anything.
+        prim    "DSEEK", W_DSEEK, 0     ; track --
+        lda     0,x
+        sta     D2TRK
+        inx
+        inx
+        stx     XSAV
+        jsr     D2MotorOn
+        jsr     D2Seek
+        ldx     XSAV
+        NEXT
+
+; DSTEP -- move n half tracks by incrementing the phase index, without
+; recalibrating.  Which way the head actually goes is the thing being
+; measured: read an address field before and after.
+        prim    "DSTEP", W_DSTEP, 0     ; n --
+        lda     0,x
+        sta     D2CNT
+        inx
+        inx
+        stx     XSAV
+        jsr     D2MotorOn
+@l:     inc     D2CURH
+        jsr     D2StepPhase
+        dec     D2CNT
+        bne     @l
+        ldx     XSAV
+        NEXT
+
+; DHALF -- where does the driver believe the head is, in half tracks?
+        prim    "DHALF", W_DHALF, 0     ; -- n
+        dex
+        dex
+        lda     D2CURH
+        sta     0,x
+        lda     #0
+        sta     1,x
+        NEXT
+
 ; DADDR -- report the first address field that goes past, as ( track sector ).
 ; 255 255 means no prologue was seen at all, which points at the drive rather
 ; than at the matching logic.
@@ -434,8 +583,12 @@ D2NIBENC:
         jsr     D2Read44
         sta     D2VOL
         jsr     D2Read44
+        cmp     #35                     ; reject noise from a drive that has
+        bcs     @next                   ; not come up to speed
         sta     D2GOTTRK
         jsr     D2Read44
+        cmp     #16
+        bcs     @next
         sta     D2TMP
         jmp     @done
 @next:  lda     D2BUDGET
@@ -499,6 +652,7 @@ D2MOTRUN:.byte  0
 D2BUDGET:.word  0
 D2CNT:   .byte  0
 D2DLY:   .byte  0
+D2PHIDX: .byte  0
 D2CHK:   .byte  0
 D2T44:   .byte  0
 D2TMP:   .byte  0
