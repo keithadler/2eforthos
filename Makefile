@@ -47,9 +47,11 @@ MACHINE ?= apple2ee
 # MAME's monitor-type config selects B&W, which is what makes 560x192 read as
 # 560 monochrome pixels.  Written before each run so it is never lost.
 MONITOR ?= 4
-# Emulation speed multiplier for `make gui`, e.g. SPEED=8 to boot quickly.
-# Empty means true 1 MHz.
-SPEED ?=
+# `make gui` boots at SPEED and then drops to true 1 MHz, because the //e
+# repeats keys in hardware: held at 8x, one keypress arrives several times.
+# BOOTFRAMES is how long to hurry for -- 60 frames is an emulated second.
+SPEED ?= 8
+BOOTFRAMES ?= 2000
 # Window size as a multiple of the emulated screen.  MAME keeps the aspect
 # ratio, so this is the box it fits the picture into.
 SCALE ?= 2
@@ -131,7 +133,9 @@ run: $(DSK) monitor
 	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
 
 gui: $(DSK) monitor
-	mame $(MAME_COMMON) -flop1 $(DSK) $(if $(SPEED),-speed $(SPEED))
+	BOOTSPEED=$(SPEED) BOOTFRAMES=$(BOOTFRAMES) \
+	  mame $(MAME_COMMON) -flop1 $(DSK) \
+	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
 
 poke:
 	./run.sh $(SRCDIR)/$(PROG).s
