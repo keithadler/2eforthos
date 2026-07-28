@@ -19,6 +19,21 @@
 ; and the automated tests use.
 ; ---------------------------------------------------------------------------
 
+; PREAD returns the moment its capacitor has discharged, so a small reading
+; returns early and leaves the game port's shared timer still charged.  The
+; next axis read then comes back skewed -- which is why taking y below about
+; 128 moved x.  Waiting out the worst case afterwards costs a few milliseconds
+; and makes the two axes independent.
+PdlSettle:
+        lda     #3
+        sta     PSETTLE
+@outer: ldy     #$00
+@inner: dey
+        bne     @inner
+        dec     PSETTLE
+        bne     @outer
+        rts
+
 KBD     = $C000                 ; bit 7 set when a key is waiting
 KBDSTRB = $C010                 ; read to clear the strobe
 BUTN0   = $C061                 ; bit 7 set while button 0 is down
@@ -240,6 +255,9 @@ PtrClamp:
         jsr     PREAD                   ; timing loop; returns the count in Y
         tya
         ldx     XSAV
+        pha
+        jsr     PdlSettle
+        pla
         sta     0,x
         lda     #0
         sta     1,x
@@ -271,6 +289,7 @@ PtrClamp:
         jsr     PREAD
         ldx     XSAV
         sty     PTMP
+        jsr     PdlSettle
         lda     PTMP
         cmp     PLASTX
         beq     @same
@@ -301,6 +320,7 @@ PtrClamp:
         jsr     PREAD
         ldx     XSAV
         sty     PTMP+1
+        jsr     PdlSettle
         lda     PTMP+1
         cmp     PLASTY
         beq     @same
