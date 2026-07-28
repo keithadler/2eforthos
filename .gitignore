@@ -1,0 +1,13 @@
+# Build products
+build/
+shots/
+
+# MAME's own scratch: per-machine slot/input config, NVRAM, stray snapshots
+cfg/
+nvram/
+snap/
+
+# Apple's ROM images are not ours to redistribute.
+# `make roms` rebuilds the whole set from AppleWin and apple2js,
+# verifying every CRC against what MAME expects.
+roms/
