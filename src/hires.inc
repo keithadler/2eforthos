@@ -121,8 +121,17 @@ HgrColor:
         rts
 
 ; Clear both banks to the byte in A.
+;
+; PVIS is cleared too.  The pointer is drawn by XOR, so PVIS records whether
+; an arrow is currently on the screen -- and wiping the screen takes it away
+; without going through PtrHide.  Leaving PVIS set means the next PtrHide
+; XORs the arrow *on* instead of off, and the one after that draws a second
+; one: exactly the spare arrow that has no business being there.
 HgrClear:
         sta     HTMP2
+        lda     #0
+        sta     PVIS
+        lda     HTMP2
         bit     AUXSEL
         jsr     ClearBank
         bit     MAINSEL
