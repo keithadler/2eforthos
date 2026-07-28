@@ -1,56 +1,68 @@
 ; ---------------------------------------------------------------------------
-; hires.inc -- Apple II hi-res screen driver, 280x192
+; hires.inc -- Apple //e double hi-res driver, 560x192 monochrome
 ;
-; The hi-res screen is 8K at $2000 with a famously scrambled row order: the
-; address of row y is
+; Double hi-res doubles the horizontal resolution by fetching two bytes per
+; position, one from auxiliary memory and one from main.  A row of 80 byte
+; columns is interleaved
 ;
+;       aux[0] main[0] aux[1] main[1] ... aux[39] main[39]
+;
+; so byte column c lives at HGRROW[y] + (c >> 1), in aux when c is even and
+; main when it is odd.  Each byte still carries 7 pixels in bits 0-6; in
+; monochrome double hi-res bit 7 is not a palette bit and is simply unused,
+; which makes this driver simpler than the ][+ one it replaces.
+;
+; Choosing the bank is a soft switch, not an address: with 80STORE set, $C055
+; points $2000-$3FFF at aux and $C054 at main.  Every routine here leaves main
+; selected on the way out, because 80STORE also makes that switch control the
+; text page at $0400-$07FF -- leaving aux selected would send the monitor's
+; output somewhere the display never looks.
+;
+; The row order is still the scrambled hi-res one:
 ;       $2000 + $400*(y mod 8) + $80*((y/8) mod 8) + $28*(y/64)
-;
-; so rows are looked up in a table rather than computed.  Horizontally, each
-; byte holds 7 pixels in bits 0-6; bit 7 selects the colour palette for that
-; byte.  x/7 and 1<<(x mod 7) are likewise table lookups, because 280 > 255
-; means x is a 16-bit quantity and dividing it by 7 per pixel would be slow.
-;
-; Colour: a byte's pixel pattern shifts by 7 bit positions from one byte to
-; the next, and 7 is odd, so a two-pixel-period colour pattern inverts every
-; byte column.  Each colour therefore carries two bytes -- one for even byte
-; columns, one for odd -- and the driver picks by column parity.
+; and x/7, 1<<(x mod 7) and x mod 7 are still table lookups, now 560 entries
+; each -- 560 is exactly 80*7, so each is one 7-entry pattern repeated.
 ; ---------------------------------------------------------------------------
 
-HGRPAGE     = $2000             ; hi-res page 1
-HGRSIZE     = $2000             ; 8K
+HGRPAGE     = $2000             ; hi-res page 1, in both banks
+HGRSIZE     = $2000             ; 8K per bank
 
 ; --- soft switches ---------------------------------------------------------
 TXTCLR      = $C050             ; graphics on
 TXTSET      = $C051             ; text on
 MIXCLR      = $C052             ; full screen
-MIXSET      = $C053             ; graphics + 4 lines of text at the bottom
-LOWSCR      = $C054             ; display page 1
-HISCR       = $C055             ; display page 2
-LORESSW     = $C056
+MIXSET      = $C053             ; graphics + 4 text lines
+MAINSEL     = $C054             ; with 80STORE: $2000-$3FFF from main
+AUXSEL      = $C055             ; ...from auxiliary memory
 HIRESSW     = $C057
+CLR80STORE  = $C000
+SET80STORE  = $C001
+CLR80COL    = $C00C
+SET80COL    = $C00D
+SETDHIRES   = $C05E
+CLRDHIRES   = $C05F
+
+WNDTOP      = $22
+CH          = $24
+CV          = $25
 
 ; ---------------------------------------------------------------------------
-; Bounds clamping.
-;
-; Every coordinate entering the driver is clamped, because the x and row
-; lookups are raw table indexes: an x of 300 or a y of 200 would read past
-; the end of a table and scribble on whatever the resulting address pointed
-; at.  Windows dragged towards an edge rely on this.
+; Bounds clamping.  Coordinates index tables directly, so an x of 600 or a y
+; of 200 would read past the end and scribble on whatever that addressed.
 ; ---------------------------------------------------------------------------
 .macro  CLAMPX addr
         .local  zero, top, done
         lda     addr+1
         bmi     zero                    ; negative
-        beq     done                    ; 0..255 is always in range
-        cmp     #1
-        bne     top                     ; >= $200
+        cmp     #2
+        bcc     done                    ; high byte 0 or 1: always in range
+        bne     top
         lda     addr
-        cmp     #<280                   ; 279 = $0117
+        cmp     #<560                   ; 559 = $022F
         bcc     done
-top:    lda     #<279
+top:    lda     #<559
         sta     addr
-        lda     #>279
+        lda     #>559
         sta     addr+1
         jmp     done
 zero:   lda     #0
@@ -73,45 +85,31 @@ done:
 ; Mode control
 ; ---------------------------------------------------------------------------
 
-; Hi-res page 1 with a four-line text window at the bottom -- graphics above,
-; the Forth prompt below.
-; Mixed mode shows only text rows 20-23, so the monitor's text window has to
-; be moved down to match -- otherwise COUT happily writes to rows the display
-; is not showing.
-WNDTOP  = $22
-CH      = $24
-CV      = $25
-VTAB    = $FC22                 ; recompute the line base from CV
-
-HgrMixed:
-        bit     TXTCLR
-        bit     MIXSET
-        bit     LOWSCR
-        bit     HIRESSW
-        lda     #20
-        sta     WNDTOP
-        sta     CV
-        lda     #0
-        sta     CH
-        stx     XSAV
-        jsr     VTAB
-        ldx     XSAV
-        rts
-
-HgrFull:
+; Full-screen monochrome double hi-res.  80COL and 80STORE must both be set:
+; the first makes the video hardware fetch aux bytes, the second makes the
+; page switch decide which bank the CPU writes to.
+HgrOn:
         bit     TXTCLR
         bit     MIXCLR
-        bit     LOWSCR
         bit     HIRESSW
+        sta     SET80COL
+        sta     SET80STORE
+        bit     SETDHIRES
+        bit     MAINSEL
         rts
 
+; Back to the plain 40-column text screen, for the REPL.
 HgrText:
         bit     TXTSET
+        bit     CLRDHIRES
+        sta     CLR80COL
+        sta     CLR80STORE
+        bit     MAINSEL
         lda     #0
         sta     WNDTOP
         rts
 
-; Select drawing colour 0..7 (see HCOLTBL at the bottom of this file).
+; Select the dither pattern, 0..7 (see HCOLTBL at the bottom of this file).
 HgrColor:
         and     #$07
         asl     a
@@ -122,14 +120,20 @@ HgrColor:
         sta     HCOLO
         rts
 
-; Clear the hi-res page to the byte in A (0 = black, $80 = the other black).
+; Clear both banks to the byte in A.
 HgrClear:
         sta     HTMP2
+        bit     AUXSEL
+        jsr     ClearBank
+        bit     MAINSEL
+        jmp     ClearBank
+
+ClearBank:
         lda     #$00
         sta     HPTR
         lda     #>HGRPAGE
         sta     HPTR+1
-        lda     #>HGRSIZE       ; page count
+        lda     #>HGRSIZE               ; page count
         sta     HTMP
         lda     HTMP2
         ldy     #$00
@@ -145,7 +149,7 @@ HgrClear:
 ; Coordinate helpers
 ; ---------------------------------------------------------------------------
 
-; HBASE := address of raster row HY
+; HBASE := address of raster row HY (the same in both banks)
 HgrRow:
         ldy     HY
         lda     HGRROWL,y
@@ -154,7 +158,7 @@ HgrRow:
         sta     HBASE+1
         rts
 
-; A := DIV7[HX]  -- the byte column holding pixel HX
+; A := DIV7[HX] -- the byte column, 0..79
 Div7:
         clc
         lda     #<DIV7TBL
@@ -167,7 +171,7 @@ Div7:
         lda     (HPTR),y
         rts
 
-; A := MOD7[HX]  -- 1 << (HX mod 7), the bit within that byte
+; A := MOD7[HX] -- 1 << (HX mod 7)
 Mod7:
         clc
         lda     #<MOD7TBL
@@ -180,8 +184,7 @@ Mod7:
         lda     (HPTR),y
         rts
 
-; A := HX mod 7 -- how far the pixel sits into its byte.  The pointer needs
-; the shift count itself, not the 1<<k mask that Mod7 returns.
+; A := HX mod 7 -- the shift count, which the pointer needs
 Mod7K:
         clc
         lda     #<MOD7KTBL
@@ -194,29 +197,47 @@ Mod7K:
         lda     (HPTR),y
         rts
 
+; Point the CPU at the bank holding byte column A and leave that byte's index
+; within the row in HBYTE.
+SelectBank:
+        lsr     a
+        sta     HBYTE
+        bcs     @main
+        bit     AUXSEL
+        rts
+@main:  bit     MAINSEL
+        rts
+
 ; ---------------------------------------------------------------------------
-; MergeByte -- write HMASK's worth of the current colour into (HBASE),Y
-;
-; Only the masked bits change:  new = old XOR ((old XOR colour) AND mask).
-; Bit 7 is not a pixel, so it is replaced wholesale from the colour byte.
+; MergeByte -- write HMASK's worth of the dither pattern into byte column
+; HCOLN of the current row.  Only the masked bits change:
+;       new = old XOR ((old XOR pattern) AND mask)
 ; ---------------------------------------------------------------------------
 MergeByte:
-        tya                     ; column parity picks the colour byte
+        lda     HCOLN
         lsr     a
-        bcc     @even
+        sta     HBYTE
+        lda     HCOLN                   ; dither phase alternates along BOTH
+        eor     HY                      ; axes, or a 50% pattern comes out as
+        lsr     a                       ; vertical stripes instead of grey
+        bcs     @phaseB
+        lda     HCOLE
+        bcc     @have                   ; carry is clear here -- unconditional
+@phaseB:
         lda     HCOLO
-        bcs     @have           ; carry is set here -- unconditional
-@even:  lda     HCOLE
 @have:  sta     HCOLB
+        lda     HCOLN                   ; the bank, though, is column parity
+        lsr     a
+        bcs     @main
+        bit     AUXSEL
+        bcc     @go
+@main:  bit     MAINSEL
+@go:    ldy     HBYTE
         lda     (HBASE),y
         eor     HCOLB
         and     HMASK
         eor     (HBASE),y
-        and     #$7F
-        sta     HTMP2
-        lda     HCOLB
-        and     #$80            ; palette bit comes from the colour
-        ora     HTMP2
+        and     #$7F                    ; bit 7 is not a pixel
         sta     (HBASE),y
         rts
 
@@ -228,26 +249,25 @@ HgrPlot:
         CLAMPY  HY
         jsr     HgrRow
         jsr     Div7
-        sta     HTMP
+        sta     HCOLN
         jsr     Mod7
         sta     HMASK
-        ldy     HTMP
-        jmp     MergeByte
+        jsr     MergeByte
+        bit     MAINSEL
+        rts
 
 ; ---------------------------------------------------------------------------
 ; HgrHLine -- horizontal span from HX to HX2 inclusive on row HY.
-;
 ; Whole bytes in the middle are stored outright; only the two end bytes need
-; read-modify-write.  That is what makes filling fast enough to be useful.
-; Caller guarantees HX <= HX2.
+; read-modify-write.  Every store still has to pick its bank.
 ; ---------------------------------------------------------------------------
 HgrHLine:
         CLAMPX  HX
         CLAMPX  HX2
         CLAMPY  HY
-        lda     HX2+1                   ; put the endpoints in order first: a
-        cmp     HX+1                    ; reversed span would send the middle
-        bcc     @swap                   ; fill loop off the end of the row
+        lda     HX2+1                   ; put the endpoints in order
+        cmp     HX+1
+        bcc     @swap
         bne     @ordered
         lda     HX2
         cmp     HX
@@ -264,65 +284,83 @@ HgrHLine:
         jsr     HgrRow
         jsr     Div7
         sta     HB1
-        jsr     Mod7            ; bit k at the left edge
+        jsr     Mod7                    ; bit k at the left edge
         sec
-        sbc     #$01            ; (1<<k)-1 = bits below k
-        eor     #$FF            ; ~that       = bits k..7
+        sbc     #$01                    ; (1<<k)-1 = bits below k
+        eor     #$FF
         and     #$7F
-        sta     HLM             ; left mask: k..6
+        sta     HLM                     ; left mask: bits k..6
 
-        lda     HX2             ; now do the right edge
+        lda     HX2                     ; now the right edge
         sta     HX
         lda     HX2+1
         sta     HX+1
         jsr     Div7
         sta     HB2
-        jsr     Mod7            ; bit j at the right edge
-        asl     a               ; 1<<(j+1)
+        jsr     Mod7
+        asl     a
         sec
-        sbc     #$01            ; bits 0..j
+        sbc     #$01
         and     #$7F
-        sta     HRM             ; right mask
+        sta     HRM
 
         lda     HB1
         cmp     HB2
         bne     @multi
-        lda     HLM             ; span lives inside one byte
+        lda     HLM                     ; the span lives inside one byte
         and     HRM
         sta     HMASK
-        ldy     HB1
-        jmp     MergeByte
+        lda     HB1
+        sta     HCOLN
+        jsr     MergeByte
+        bit     MAINSEL
+        rts
 
-@multi: ldy     HB1             ; left partial byte
+@multi: lda     HB1                     ; left partial byte
+        sta     HCOLN
         lda     HLM
         sta     HMASK
         jsr     MergeByte
 
-        ldy     HB1             ; solid bytes in between
-        iny
-@mid:   cpy     HB2
+        lda     HB1                     ; solid bytes in between
+        clc
+        adc     #1
+        sta     HCOLN
+@mid:   lda     HCOLN
+        cmp     HB2
         beq     @right
-        tya
         lsr     a
-        bcc     @mideven
-        lda     HCOLO
-        bcs     @midput
-@mideven:
+        sta     HBYTE
+        bcs     @midmain
+        bit     AUXSEL
+        bcc     @midphase
+@midmain:
+        bit     MAINSEL
+@midphase:
+        lda     HCOLN
+        eor     HY
+        lsr     a
+        bcs     @midB
         lda     HCOLE
+        bcc     @midput
+@midB:  lda     HCOLO
 @midput:
+        ldy     HBYTE
         sta     (HBASE),y
-        iny
+        inc     HCOLN
         bne     @mid
 
-@right: ldy     HB2             ; right partial byte
+@right: lda     HB2                     ; right partial byte
+        sta     HCOLN
         lda     HRM
         sta     HMASK
-        jmp     MergeByte
+        jsr     MergeByte
+        bit     MAINSEL
+        rts
 
 ; ---------------------------------------------------------------------------
 ; HgrVLine -- vertical span at HX from HY to HY2 inclusive.
-; x is fixed, so the byte column and bit mask are computed once.
-; Caller guarantees HY <= HY2.
+; x is fixed, so the byte column, its bank and the bit mask are found once.
 ; ---------------------------------------------------------------------------
 HgrVLine:
         CLAMPX  HX
@@ -337,26 +375,24 @@ HgrVLine:
         sty     HY
 @ordered:
         jsr     Div7
-        sta     HTMP
+        sta     HCOLN
         jsr     Mod7
         sta     HMASK
 @loop:  jsr     HgrRow
-        ldy     HTMP
         jsr     MergeByte
         lda     HY
         cmp     HY2
-        bcs     @done                   ; >= rather than =, so a stray HY
-        inc     HY                      ; cannot run past the row table
+        bcs     @done
+        inc     HY
         bne     @loop
-@done:  rts
+@done:  bit     MAINSEL
+        rts
 
 ; ---------------------------------------------------------------------------
-; HgrFillRect -- solid rectangle HX..HX2 by HY..HY2.
-;
-; Filling row by row from Forth costs a few hundred cycles of threading per
-; row; doing the whole rectangle here makes a full-screen repaint fast enough
-; to drag a window against.  HgrHLine consumes HX, so the span is restored
-; from a copy on every row.
+; HgrFillRect -- solid rectangle HX..HX2 by HY..HY2.  Filling row by row from
+; Forth costs a few hundred cycles of threading per row; doing the whole
+; rectangle here keeps a full repaint fast enough to drag a window against.
+; HgrHLine consumes HX, so the span is restored on every row.
 ; ---------------------------------------------------------------------------
 HgrFillRect:
         CLAMPY  HY
@@ -391,16 +427,17 @@ HgrFillRect:
         bcs     @done
         inc     HY
         bne     @row
-@done:  rts
+@done:  bit     MAINSEL
+        rts
 
 ; ---------------------------------------------------------------------------
 ; Tables
 ; ---------------------------------------------------------------------------
 
-; Row -> screen address.  Written as integer arithmetic rather than shifts and
-; masks so the decomposition stays readable: row = 8a+b, a = 8c+d, giving
-; base + $400*b + $80*d + $28*c.  (The loop variable cannot be called `y` --
-; ca65 reserves that as a register name.)
+; Row -> screen address, the same in both banks.  Written as integer
+; arithmetic rather than shifts so the decomposition stays readable:
+; row = 8a+b, a = 8c+d, giving base + $400*b + $80*d + $28*c.  (The loop
+; variable cannot be called `y` -- ca65 reserves that as a register name.)
 HGRROWL:
         .repeat 192, row
         .byte   <(HGRPAGE + (row - (row/8)*8)*$400 + ((row/8) - (row/64)*8)*$80 + (row/64)*$28)
@@ -410,38 +447,37 @@ HGRROWH:
         .byte   >(HGRPAGE + (row - (row/8)*8)*$400 + ((row/8) - (row/64)*8)*$80 + (row/64)*$28)
         .endrep
 
-; 280 pixels is exactly 40 bytes of 7, so both tables are one 7-entry pattern
-; repeated 40 times -- x/7 is the byte column, 1<<(x mod 7) is the bit in it.
+; 560 pixels is exactly 80 bytes of 7, so each table is one 7-entry pattern
+; repeated 80 times: the byte column, the bit within it, and the shift count.
 DIV7TBL:
-        .repeat 40, col
+        .repeat 80, col
         .byte   col, col, col, col, col, col, col
         .endrep
 MOD7TBL:
-        .repeat 40
+        .repeat 80
         .byte   $01, $02, $04, $08, $10, $20, $40
         .endrep
 MOD7KTBL:
-        .repeat 40
+        .repeat 80
         .byte   0, 1, 2, 3, 4, 5, 6
         .endrep
 
-; Applesoft's eight colours, as (even column, odd column) byte pairs.
-;   0 black   1 green   2 violet  3 white
-;   4 black2  5 orange  6 blue    7 white2
-; Span endpoints held across the rows of a rectangle fill.  Kept here rather
-; than in the caller so that hires.inc stands on its own -- test/hirestest.s
-; includes it without any of the Forth system.
+; Monochrome, so these are dither patterns rather than colours: one byte for
+; even byte columns and one for odd, which is what lets a checkerboard come
+; out even though a byte spans an odd number of pixels.
+HCOLTBL:
+        .byte   $00,$00         ; 0 black
+        .byte   $11,$44         ; 1 dark grey
+        .byte   $2A,$55         ; 2 50% grey
+        .byte   $7F,$7F         ; 3 white
+        .byte   $00,$00         ; 4 black
+        .byte   $44,$11         ; 5 dark grey, opposite phase
+        .byte   $55,$2A         ; 6 50% grey, opposite phase
+        .byte   $7F,$7F         ; 7 white
+
+; Span endpoints held across the rows of a rectangle fill.  Kept here so that
+; hires.inc stands on its own for test/hirestest.s.
         .segment "DATA"
 HFX1:   .word   0
 HFX2:   .word   0
         .segment "CODE"
-
-HCOLTBL:
-        .byte   $00,$00         ; black
-        .byte   $2A,$55         ; green
-        .byte   $55,$2A         ; violet
-        .byte   $7F,$7F         ; white
-        .byte   $80,$80         ; black (palette 2)
-        .byte   $AA,$D5         ; orange
-        .byte   $D5,$AA         ; blue
-        .byte   $FF,$FF         ; white (palette 2)

@@ -33,12 +33,26 @@ BIN     := build/$(PROG).bin
 DSK     := build/$(PROG).dsk
 DOSNAME := $(shell echo $(PROG) | tr '[:lower:]' '[:upper:]').BIN
 
+# Enhanced //e: 128K via the Extended 80-column card, which MAME already has
+# as the default aux device -- that is what makes double hi-res available.
 # -sl4 "" drops the Mockingboard (we have no ROM for its Votrax speech chip).
 # Slot 6 keeps its default Disk II controller so -flop1 has somewhere to go.
-MAME_COMMON := apple2p -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
-               -window -nomaximize -snapshot_directory $(SHOTS)
+MACHINE ?= apple2ee
+# Double hi-res is a colour mode by default and one-pixel strokes fringe badly.
+# MAME's monitor-type config selects B&W, which is what makes 560x192 read as
+# 560 monochrome pixels.  Written before each run so it is never lost.
+MONITOR ?= 4
+MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
+               -window -nomaximize -snapshot_directory $(SHOTS) \
+               -cfg_directory $(CURDIR)/cfg
 
-.PHONY: all roms disk run gui poke clean
+.PHONY: all roms disk run gui poke monitor clean
+
+# Select the B&W monitor by writing MAME's per-machine config directly.
+monitor:
+	@mkdir -p cfg
+	@printf '<?xml version="1.0"?>\n<mameconfig version="10">\n <system name="%s">\n  <input>\n   <port tag=":a2video:a2_video_config" type="CONFIG" mask="7" defvalue="0" value="%s" />\n  </input>\n </system>\n</mameconfig>\n' \
+	  '$(MACHINE)' '$(MONITOR)' > cfg/$(MACHINE).cfg
 
 all: $(BIN)
 
@@ -86,13 +100,13 @@ $(DSK): $(BIN)
 # The OS writes to its own disk (delete, rename, lock), and MAME writes those
 # changes back to the image.  Automated runs boot a scratch copy so they stay
 # reproducible; `make gui` uses the real image so interactive changes stick.
-run: $(DSK)
-	@rm -rf $(SHOTS)/apple2p
+run: $(DSK) monitor
+	@rm -rf $(SHOTS)/$(MACHINE)
 	@cp $(DSK) build/run.dsk
 	mame $(MAME_COMMON) -flop1 build/run.dsk -nothrottle -seconds_to_run $(SECS)
-	@echo "screenshot -> $(SHOTS)/apple2p/0000.png"
+	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
 
-gui: $(DSK)
+gui: $(DSK) monitor
 	mame $(MAME_COMMON) -flop1 $(DSK)
 
 poke:

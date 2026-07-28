@@ -1,8 +1,8 @@
-# Apple ][+ Forth
+# A2FORTH OS
 
-A Forth system with a hi-res graphics driver and a mouse-pointer windowing
-environment, running on an emulated Apple ][+.  6502 source in, bootable
-DOS 3.3 floppy out.
+A Forth system with a **560x192 monochrome double hi-res** driver and a
+pointer-driven windowing environment, running on an emulated Apple //e.
+6502 source in, bootable DOS 3.3 floppy out.
 
 ```bash
 make roms         # rebuild the Apple ROM set (once, see Emulator below)
@@ -12,11 +12,12 @@ open shots/apple2p/0000.png
 ```
 
 Boot shows a splash with the OS name and version, reads the disk catalog, and
-lands on a desktop: a menu bar with free-space, a file explorer listing the
-DOS 3.3 catalog, a draggable window, and an arrow pointer.  A live Forth REPL
-sits in the bottom four text lines — `12 34 * .` prints `408`.
+lands **inside the desktop event loop**: a menu bar with free space, a file
+explorer listing the DOS 3.3 catalog in 80 columns, a draggable window, and an
+arrow pointer.  `Q` leaves the desktop for a Forth REPL on the 40-column text
+screen — `12 34 * .` prints `408` — and `DESK` goes back.
 
-`DESK` enters the event loop:
+Keys in the desktop:
 
 | key | |
 |---|---|
@@ -60,6 +61,7 @@ Forth source (see *Bootstrap cost* below).
 | `tools/fetch-roms.py` | rebuilds the MAME ROM set from AppleWin and apple2js |
 | `tools/mkfont.py` | carves a 7x8 font out of the Apple character ROM |
 | `tools/mkboot.py` | converts `system.fth` into a byte table the kernel interprets |
+| `tools/mkkbdrom.py` | generates the //e keyboard decoder ROM |
 
 Everything in `src/*.s` is one assembly unit — `forth.s` includes the rest,
 because the dictionary is a linked list that has to be chained in a single
@@ -103,7 +105,7 @@ i/o       EMIT KEY CR SPACE PAGE . ."
 control   IF ELSE THEN BEGIN UNTIL AGAIN WHILE REPEAT DO LOOP I EXIT EXECUTE
 define    : ; VARIABLE CONSTANT CREATE IMMEDIATE , C, ALLOT HERE ' \
 system    STATE BASE DP LATEST WORDS BYE
-graphics  HGR HGRFULL TEXT HCLS HCOLOR HPLOT HLINE HVLINE HBOX
+graphics  HGR TEXT HCLS HCOLOR HPLOT HLINE HVLINE HBOX
 hires text TAT TEMIT TINV T."
 pointer   PTRSHOW PTRHIDE PTRAT PTRX PTRY MREAD
 input     KEY? KEYC BTN PADDLE
@@ -116,33 +118,45 @@ terminal  ASKLN
 
 Numbers accept a leading `-` and a `$` prefix for hex.
 
-## The hi-res driver
+## The double hi-res driver
 
-280×192, 8K at `$2000`. Two things make it awkward and both are handled by
-table lookup rather than arithmetic:
+560×192 monochrome. Double hi-res doubles the horizontal resolution by
+fetching **two bytes per position** — one from auxiliary memory, one from
+main. A row of 80 byte columns is interleaved
+
+```
+aux[0] main[0] aux[1] main[1] ... aux[39] main[39]
+```
+
+so byte column *c* lives at `HGRROW[y] + (c >> 1)`, in aux when *c* is even
+and main when it is odd. Each byte still carries 7 pixels in bits 0–6.
+
+**Choosing the bank is a soft switch, not an address.** With `80STORE` set,
+`$C055` points `$2000-$3FFF` at aux and `$C054` at main. Every routine leaves
+main selected on the way out, because `80STORE` also makes that same switch
+control the text page at `$0400-$07FF` — leave aux selected and the monitor's
+output goes somewhere the display never looks.
+
+Two things about the geometry are handled by table lookup rather than
+arithmetic:
 
 - **Rows are scrambled.** Row *y* lives at
-  `$2000 + $400*(y mod 8) + $80*((y/8) mod 8) + $28*(y/64)`, so there is a
-  192-entry address table instead of a computation.
-- **x is 16-bit.** 280 > 255, so `x/7` (byte column) and `1<<(x mod 7)` (bit
-  within it) come from 280-byte tables. 280 is exactly 40×7, so each table is
-  just a 7-entry pattern repeated 40 times.
+  `$2000 + $400*(y mod 8) + $80*((y/8) mod 8) + $28*(y/64)` — the same address
+  in both banks — so there is a 192-entry table instead of a computation.
+- **x is 16-bit.** `x/7`, `1<<(x mod 7)` and `x mod 7` come from 560-byte
+  tables. 560 is exactly 80×7, so each is a 7-entry pattern repeated 80 times.
 
-**Colour.** A byte holds 7 pixels in bits 0–6; bit 7 picks the palette. The
-pixel pattern shifts by 7 bit positions from one byte to the next, and 7 is
-odd, so a two-pixel-period colour pattern inverts every byte column. Each
-colour therefore carries two bytes — one for even byte columns, one for odd —
-and the driver selects by column parity. Colours are Applesoft's: 0 black,
-1 green, 2 violet, 3 white, 4 black2, 5 orange, 6 blue, 7 white2.
-
-A consequence worth knowing: a one-pixel-wide vertical line **cannot be
-white**. It comes out green or violet depending on which column it lands in.
-That is the hardware, not a bug — the window borders in the demo show it.
+**Monochrome simplifies things.** In double hi-res bit 7 is not a palette bit
+and is simply unused, so there is none of the ][+'s colour-fringing
+arithmetic: a one-pixel vertical line really is white. What used to be the
+colour table is now a **dither** table — a pattern byte for each phase, giving
+black, two greys and white. The phase alternates along *both* axes (`column
+XOR row`); alternating by column alone turns a 50% pattern into vertical
+stripes instead of grey.
 
 `HLINE` stores whole bytes across the middle of a span and only does
-read-modify-write on the two end bytes, which is what makes filling fast
-enough to be usable. Both span routines order their own endpoints, so a
-reversed span can't run the fill loop off the end of a row.
+read-modify-write on the two end bytes. Both span routines order their own
+endpoints, so a reversed span can't run the fill loop off the end of a row.
 
 ## The pointer
 
@@ -187,22 +201,22 @@ anywhere else → just raise. `GRAB` holds the index of the window being
 carried, or −1. `PSTEP` moves the pointer and, if something is grabbed, shifts
 that window by the same delta and repaints.
 
-## Text on the hi-res screen
+## Text on the graphics screen
 
 A screen byte holds 7 pixels and the font is 7 wide, so a character is exactly
-one byte column: **40 columns by 24 rows**, and drawing a glyph is eight
-stores down consecutive raster rows with no shifting and no read-modify-write.
-That alignment is the only reason the font is 7 wide rather than 5.
+one byte column: **80 columns by 24 rows**, and drawing a glyph is eight
+stores down consecutive raster rows with no shifting and no
+read-modify-write. That alignment is the only reason the font is 7 wide
+rather than 5, and it is what makes double hi-res give a full 80 columns.
+The bank is fixed for a whole character, so it is chosen once per glyph.
 
 The glyphs come from the Apple II character generator ROM, carved out at build
 time by `tools/mkfont.py`. Its bit order is the mirror of the hi-res screen's,
 so every byte is reversed on the way out. `build/font.inc` is a build product
 and is not committed — the shapes are Apple's.
 
-Strokes are one pixel wide, so text fringes green and violet depending on
-which column it lands in. That is what Apple II hi-res text has always looked
-like. `TINV` swaps ink and paper by XORing `$7F`, which is how the menu bar,
-the window titles, and the selected file row are highlighted.
+`TINV` swaps ink and paper by XORing `$7F`, which is how the menu bar, the
+window titles, and the selected file row are highlighted.
 
 ## The disk
 
@@ -261,7 +275,7 @@ unambiguous because track 0 is DOS and never allocated to a file.
 |---|---|
 | `$0800-$0FFF` | one raw disk sector |
 | `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
-| `$2000-$3FFF` | hi-res page 1, the visible screen |
+| `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
 | `$4000-$6E9x` | the kernel |
 | `$6E9x-$92FF` | dictionary, growing upward |
 | `$9300-$95FF` | DOS 3.3 file buffer (one, see below) |
@@ -365,6 +379,8 @@ explorer has a real catalog to browse.
 | knob | default | meaning |
 |---|---|---|
 | `PROG` | `forth` | output binary/disk name |
+| `MACHINE` | `apple2ee` | MAME driver (`apple2p` still builds for the ][+ tests) |
+| `MONITOR` | `4` | MAME monitor type — 4 is B&W, 0 is colour |
 | `SRCDIR` | `src` | which directory to assemble |
 | `ORG` | `0x4000` | load address |
 | `SECS` | `32` | emulated seconds before auto-exit (boot needs ~32) |
@@ -399,33 +415,69 @@ also runs in other emulators or on real hardware via ADTPro. Inspect it with
 
 ## Emulator
 
-MAME's `apple2p` driver (Apple ][+, 48K). MAME ships no Apple ROMs and
-**neither does this repository** — they are not ours to redistribute. Rebuild
-them:
+MAME's `apple2ee` driver (enhanced Apple //e). MAME already makes the
+Extended 80-column card the default aux device, so 128K and double hi-res are
+standard — no extra ROM for either. MAME ships no Apple ROMs and **neither
+does this repository** — they are not ours to redistribute. Rebuild them:
 
 ```bash
 make roms
 ```
 
-That reconstructs all nine from two GPL projects and refuses to finish unless
-every CRC32 matches what MAME expects:
+Everything downloaded is CRC-checked against what MAME expects, and the script
+refuses to finish on a mismatch:
 
-- **AppleWin** carries the six 2K system ROMs (as one 12K image), the
-  character generator, and the Disk II boot PROM.
+- **AppleWin** carries the //e main ROMs (as one 16K image) and the mousetext
+  character generator, plus the ][+ system ROMs and the Disk II boot PROM.
 - **apple2js** carries the Disk II logic-state sequencer, transcribed from
   *Understanding the Apple IIe* rather than dumped. It indexes the table by
   (state, input); the physical PROM wires those bits to its address lines in
   a different order, so the script searches all 8! orderings for the one whose
-  CRC matches. It is the same data, re-addressed.
+  CRC matches. Same data, re-addressed.
+
+### The keyboard ROM
+
+One file is **generated, not downloaded**: `341-0132-d.e12`, the //e keyboard
+decoder. No open project ships that dump — GitHub turns up only references to
+it, including MAME's own source and Mednafen's documentation listing its
+SHA-256. With a blank stand-in the machine boots perfectly and the keyboard is
+completely dead.
+
+It does not have to be Apple's dump, though, because MAME uses it as a plain
+lookup (`apple2e.cpp`, `ay3600_data_ready_w`):
+
+```
+address = key << 2 | !shift | !ctrl << 1 | !capslock << 9
+ascii   = kbdrom[address]
+```
+
+with `key = row * 10 + column` (`kb3600.cpp`). `tools/mkkbdrom.py` builds a
+table that decodes correctly from the published North American //e matrix.
+
+A detail that cost a debugging round: the matrix must follow MAME's **`PORT_CHAR`
+assignments**, not the ASCII-art comment above them — the two disagree about
+N and M, and the ports are what MAME actually scans. Get it wrong and keys
+come out as their neighbours.
+
+MAME prints a checksum warning for this file on startup. That is cosmetic; the
+keyboard works. Drop a real dump over the top and the warning goes away.
 
 Check the result independently with:
 
 ```bash
-mame -rompath ./roms -verifyroms apple2p
+mame -rompath ./roms -verifyroms apple2p    # the ][+ set is complete
+mame -rompath ./roms -verifyroms apple2ee   # warns on the generated keyboard
 ```
 
-The only ROM reported missing is `sc01a.bin`, the Votrax speech chip on the
+The other ROM reported missing is `sc01a.bin`, the Votrax speech chip on the
 Mockingboard in slot 4, which `-sl4 ""` removes.
+
+### Monochrome
+
+Double hi-res is a colour mode by default, and one-pixel strokes fringe badly.
+MAME's per-machine **Monitor type** config selects B&W; `make monitor` writes
+that setting into `cfg/$(MACHINE).cfg` before every run, which is what makes
+560×192 read as 560 monochrome pixels. Override with `MONITOR=0` for colour.
 
 | tool | role |
 |---|---|
