@@ -13,7 +13,7 @@
 
 PROG    ?= forth
 SRCDIR  ?= src
-ORG     ?= 0x6000
+ORG     ?= 0x4000
 VOLUME  ?= 254
 SECS    ?= 32
 
@@ -24,6 +24,9 @@ SHOTS   := $(CURDIR)/shots
 SRCS    := $(wildcard $(SRCDIR)/*.s)
 # forth.s pulls the system in with .include, so every .inc is a dependency
 INCS    := $(wildcard src/*.inc)
+# Generated into build/: the font is carved out of the Apple character ROM,
+# and the boot source is src/system.fth converted to a byte table.
+GENERATED := build/font.inc build/bootsrc.inc
 OBJS    := $(patsubst $(SRCDIR)/%.s,build/%.o,$(SRCS))
 BIN     := build/$(PROG).bin
 DSK     := build/$(PROG).dsk
@@ -46,8 +49,17 @@ roms:
 build:
 	@mkdir -p build
 
-build/%.o: $(SRCDIR)/%.s $(INCS) src/apple2.cfg | build
-	ca65 -g -I src -D DOS=1 -l build/$*.lst $< -o $@
+build/font.inc: roms/apple2p/341-0036.chr tools/mkfont.py | build
+	@python3 tools/mkfont.py $< $@ | head -1
+
+build/bootsrc.inc: src/system.fth tools/mkboot.py | build
+	@python3 tools/mkboot.py $< $@
+
+roms/apple2p/341-0036.chr:
+	@echo "Apple ROMs are not present.  Run: make roms" >&2; exit 1
+
+build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
+	ca65 -g -I src -I build -D DOS=1 -l build/$*.lst $< -o $@
 
 $(BIN): $(OBJS) src/apple2.cfg
 	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -o $@ $(OBJS)
@@ -62,6 +74,8 @@ $(DSK): $(BIN)
 	@printf '10 PRINT CHR$$(4);"MAXFILES 1"\n20 PRINT CHR$$(4);"BRUN %s"\n' '$(DOSNAME)' \
 	  | $(A2KIT) tokenize -t atxt -a 2049 \
 	  | $(A2KIT) put -d $@ -f HELLO -t atok
+	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
+	@$(A2KIT) put -d $@ -f README -t txt < DISK.TXT
 	@$(A2KIT) catalog -d $@
 
 # -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)

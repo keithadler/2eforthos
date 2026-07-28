@@ -13,7 +13,13 @@
 ; TOS is at (0,X)/(1,X); pushing is DEX DEX.  X = DSTACK_TOP means empty, and
 ; since a push decrements X first, the sentinel cell itself is never written.
 DSTACK_BOT  = $50               ; lowest cell address (overflow guard)
-DSTACK_TOP  = $B0               ; X when the stack is empty  (48 cells)
+DSTACK_TOP  = $A0               ; X when the stack is empty  (40 cells)
+
+; $A0-$AF is a deliberate gap.  The deepest primitive reaches 7,X, so an
+; empty-stack fetch lands here rather than on IP -- which matters because
+; `@` on an empty stack would otherwise store its result *into* IP and send
+; the inner interpreter somewhere random.  A mistyped line should produce an
+; error, not a crash.
 
 ; --- Forth kernel ----------------------------------------------------------
 IP          = $B0               ; 2  interpreter pointer (next thread cell)
@@ -45,3 +51,18 @@ HRM         = $CD               ; 1  right edge mask
 SRC         = $CE               ; 2  general source pointer
 UTMP        = $D0               ; 2
 UTMP2       = $D2               ; 2
+
+; --- hi-res text -----------------------------------------------------------
+TPTR        = $D4               ; 2  glyph pointer into FONT
+TCOL        = $D6               ; 1  text column, 0..39
+TROW        = $D7               ; 1  text row, 0..23
+TIDX        = $D8               ; 1
+TY          = $D9               ; 1  first raster row of the cell
+TINVF       = $DA               ; 1  $7F for inverse video, else $00
+
+; --- disk ------------------------------------------------------------------
+; RWTS itself works below $0050, so none of this collides with it.
+IOBP        = $DB               ; 2  pointer to DOS's IOB
+RTRK        = $DD               ; 1
+RSEC        = $DE               ; 1
+RCMD        = $DF               ; 1  1 = read, 2 = write
