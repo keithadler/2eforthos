@@ -15,6 +15,10 @@ PROG    ?= forth
 SRCDIR  ?= src
 ORG     ?= 0x4000
 VOLUME  ?= 254
+# Sectors the loader steps between reads.  Must be coprime with 16 so that
+# stepping still visits every sector.  Wider costs revolutions per track but
+# gives the six-and-two decode time to finish before the next one arrives.
+ILEAVE  ?= 5
 SECS    ?= 42
 
 A2KIT   := $(HOME)/.cargo/bin/a2kit
@@ -28,7 +32,7 @@ DISKFILES := $(wildcard disk/*)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/bootsrc.inc
-LOADER  := build/loader.bin
+BOOT1   := build/boot1.bin
 # What the disk's greeting runs.  The Forth build goes through the fast
 # loader; other builds BRUN their own binary directly.
 GREETRUN ?= LOADER
@@ -87,30 +91,31 @@ roms/apple2p/341-0036.chr:
 build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
 	ca65 -g -I src -I build -D DOS=1 -l build/$*.lst $< -o $@
 
-# The fast loader is a separate program: BRUN by the greeting, it reads the
-# kernel's sectors itself rather than going through DOS's file manager.
-$(LOADER): boot/loader.s src/apple2.cfg | build
-	ca65 -g -I src boot/loader.s -o build/loader.o
-	ld65 -C src/apple2.cfg -S 0x0800 -o $@ build/loader.o
+# The boot loader replaces DOS entirely.  It has to know how big the kernel
+# is, so that comes from the linked binary.
+build/kernsecs.inc: $(BIN) | build
+	@printf 'KERNSECS = %s\nKERNILEAVE = %s\n' \
+	  $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) '$(ILEAVE)' > $@
+	@echo "kernel is $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) sectors, interleave $(ILEAVE)"
+
+$(BOOT1): boot/boot1.s build/kernsecs.inc src/d2core.inc src/apple2.cfg | build
+	ca65 -g -I src -I build boot/boot1.s -o build/boot1.o
+	ld65 -C src/apple2.cfg -S 0x0800 -o $@ build/boot1.o
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
 
 $(BIN): $(OBJS) src/apple2.cfg
-	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -o $@ $(OBJS)
+	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
 disk: $(DSK)
 
-$(DSK): $(BIN) $(LOADER)
+$(DSK): $(BIN) $(BOOT1)
 	@rm -f $@
-	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -b -d $@
-	$(A2KIT) put -d $@ -f $(DOSNAME) -t bin -a $$(( $(ORG) )) < $(BIN)
-	@$(A2KIT) put -d $@ -f LOADER -t bin -a 2048 < $(LOADER)
-	@printf '10 PRINT CHR$$(4);"MAXFILES 1"\n20 PRINT CHR$$(4);"BRUN %s"\n' '$(GREETRUN)' \
-	  | $(A2KIT) tokenize -t atxt -a 2049 \
-	  | $(A2KIT) put -d $@ -f HELLO -t atok
+	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
 	@for f in $(DISKFILES); do \
 	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
+	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE)
 	@$(A2KIT) catalog -d $@
 
 # -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)
