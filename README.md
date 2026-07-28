@@ -11,33 +11,46 @@ make gui          # same, but leaves the window up so you can drive it
 open shots/apple2p/0000.png
 ```
 
-Booting draws a desktop with three overlapping windows and an arrow pointer,
-and leaves a live Forth REPL in the bottom four text lines.  `12 34 * .`
-prints `408`.  `DESK` enters the event loop: **IJKL** move the pointer,
-**space** clicks, **Q** quits.  Click a title bar to pick a window up, click
-again to drop it, click the close box to remove it, click anywhere in a
-window to raise it.
+Boot shows a splash with the OS name and version, reads the disk catalog, and
+lands on a desktop: a menu bar with free-space, a file explorer listing the
+DOS 3.3 catalog, a draggable window, and an arrow pointer.  A live Forth REPL
+sits in the bottom four text lines — `12 34 * .` prints `408`.
 
-Boot takes about 28 emulated seconds, most of it compiling the system's own
+`DESK` enters the event loop:
+
+| key | |
+|---|---|
+| `I` `J` `K` `L` | move the pointer |
+| space | click — select a file, raise/carry a window, or close one |
+| `T` | lock/unlock the selected file (writes the catalog back) |
+| `M` | read the joystick |
+| `Q` | leave the event loop |
+
+Boot takes about 32 emulated seconds, most of it compiling the system's own
 Forth source (see *Bootstrap cost* below).
 
 ## Layout
 
 | path | what |
 |---|---|
-| `src/forth.s` | top level: cold start, and the system's own Forth source |
+| `src/forth.s` | top level: cold start, banner, memory map |
+| `src/system.fth` | **the OS written in Forth**: windows, explorer, event loop |
 | `src/dict.inc` | dictionary format and the macros that build it |
 | `src/kernel.inc` | inner interpreter and the primitive word set |
 | `src/interp.inc` | outer interpreter, compiler, defining words |
 | `src/hires.inc` | the 280×192 screen driver |
 | `src/gwords.inc` | Forth bindings for the driver |
 | `src/pointer.inc` | XOR mouse pointer, keyboard and joystick input |
+| `src/text.inc` | 40x24 text on the hi-res screen |
+| `src/disk.inc` | raw sector access through DOS 3.3's RWTS |
 | `src/zp.inc` | zero page allocation |
 | `test/hirestest.s` | drives the graphics driver from plain assembly |
 | `examples/hello.s` | the original 31-byte hello world |
 | `tools/dumptext.lua` | dumps the text screen, zero page, and dictionary state |
 | `tools/drive.lua` | types lines into the running Forth at a pace it can keep up with |
 | `tools/fetch-roms.py` | rebuilds the MAME ROM set from AppleWin and apple2js |
+| `tools/mkfont.py` | carves a 7x8 font out of the Apple character ROM |
+| `tools/mkboot.py` | converts `system.fth` into a byte table the kernel interprets |
 
 Everything in `src/*.s` is one assembly unit — `forth.s` includes the rest,
 because the dictionary is a linked list that has to be chained in a single
@@ -61,10 +74,13 @@ compiling. It reaches back into Forth through `DoRun`, a two-cell thread
 holding the word to run followed by a primitive that restores `IP` and
 `RTS`es to the assembly caller.
 
-**The system's own source is embedded** in `forth.s` as text and interpreted
-at boot, before the keyboard is read. Anything expressible in Forth lives
-there rather than in assembly — `HBOX`, `HFRAME`, `WINDOW`, `MIN`, `/MOD` and
-friends are all Forth.
+**The system's own source is `src/system.fth`**, converted to a byte table by
+`tools/mkboot.py` and interpreted at boot before the keyboard is read.
+Anything expressible in Forth lives there rather than in assembly — the
+windows, the explorer, the event loop, and the boot sequence itself are all
+Forth. Definitions must precede their first use, so the file reads
+bottom-up: helpers, shapes, the window list, disk, text, explorer, painting,
+input, and the boot line last.
 
 ### Word set
 
@@ -79,10 +95,13 @@ control   IF ELSE THEN BEGIN UNTIL AGAIN WHILE REPEAT DO LOOP I EXIT EXECUTE
 define    : ; VARIABLE CONSTANT CREATE IMMEDIATE , C, ALLOT HERE ' \
 system    STATE BASE DP LATEST WORDS BYE
 graphics  HGR HGRFULL TEXT HCLS HCOLOR HPLOT HLINE HVLINE HBOX
+hires text TAT TEMIT TINV T."
 pointer   PTRSHOW PTRHIDE PTRAT PTRX PTRY MREAD
 input     KEY? KEYC BTN PADDLE
+disk      RSECT WSECT
 memory    CMOVE
 windows   HFRAME WINDOW ADDWIN PAINT REPAINT HIT RAISE CLICK PSTEP DESK
+files     CATLOAD FREE EXPLORER EPICK FLOCK
 ```
 
 Numbers accept a leading `-` and a `$` prefix for hex.
@@ -158,31 +177,90 @@ anywhere else → just raise. `GRAB` holds the index of the window being
 carried, or −1. `PSTEP` moves the pointer and, if something is grabbed, shifts
 that window by the same delta and repaints.
 
+## Text on the hi-res screen
+
+A screen byte holds 7 pixels and the font is 7 wide, so a character is exactly
+one byte column: **40 columns by 24 rows**, and drawing a glyph is eight
+stores down consecutive raster rows with no shifting and no read-modify-write.
+That alignment is the only reason the font is 7 wide rather than 5.
+
+The glyphs come from the Apple II character generator ROM, carved out at build
+time by `tools/mkfont.py`. Its bit order is the mirror of the hi-res screen's,
+so every byte is reversed on the way out. `build/font.inc` is a build product
+and is not committed — the shapes are Apple's.
+
+Strokes are one pixel wide, so text fringes green and violet depending on
+which column it lands in. That is what Apple II hi-res text has always looked
+like. `TINV` swaps ink and paper by XORing `$7F`, which is how the menu bar,
+the window titles, and the selected file row are highlighted.
+
+## The disk
+
+DOS 3.3 is still resident at `$9600`, so rather than driving the Disk II by
+hand the kernel borrows its **RWTS**: `$03E3` hands back DOS's own IOB, already
+filled in with slot, drive and device table, and `$03D9` performs whatever the
+IOB describes. `RSECT` and `WSECT` expose that to Forth as raw 256-byte
+sector reads and writes.
+
+RWTS works entirely below `$0050` in zero page — exactly the region this Forth
+was built to keep its hands off from the very first commit. That decision is
+what makes calling it safe now, with no shadowing or save/restore.
+
+Everything above sector level is Forth. `CATLOAD` walks the catalog: the VTOC
+at track 17 sector 0 names the first catalog sector, each catalog sector names
+the next, entries are 35 bytes each starting at offset `$0B`, a `$00` first
+byte ends the catalog and `$FF` marks a deletion. Parsed entries go into
+`CATBUF` as 36-byte records — type, size, **where the entry came from**
+(catalog track, sector, byte offset), and the 30-character name. Keeping the
+origin is what lets `FLOCK` write a change back.
+
+`FREE` counts free sectors out of the VTOC's four-byte-per-track bitmap.
+
+## The explorer
+
+Window 0 is the file browser. Its text grid is derived from the window
+rectangle rather than hardcoded, so it stays correct if the window moves; the
+window's top edge is a multiple of 8 so its title bar lands exactly on a text
+row.
+
+Clicking it selects a file rather than raising or dragging, which is also why
+it never leaves the back of the z-order — everything else can be raised over
+it. `T` toggles the lock bit on the selected file: read the catalog sector,
+flip bit 7 of the type byte, write the sector back, reload. That is the only
+thing in the system that writes to the disk.
+
 ## Memory map
 
 | range | what |
 |---|---|
-| `$0800-$1FFF` | free, 6K — earmarked for window backing store |
+| `$0800-$0FFF` | one raw disk sector |
+| `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
 | `$2000-$3FFF` | hi-res page 1, the visible screen |
-| `$4000-$5FFF` | hi-res page 2, a back buffer for later |
-| `$6000-$829B` | the kernel |
-| `$829C-$92FF` | dictionary, growing upward (~4K free after boot) |
+| `$4000-$6E9x` | the kernel |
+| `$6E9x-$92FF` | dictionary, growing upward |
 | `$9300-$95FF` | DOS 3.3 file buffer (one, see below) |
 | `$9600-$BFFF` | DOS 3.3 |
 
 The disk's greeting issues `MAXFILES 1` before `BRUN`, which drops DOS from
 three file buffers to one and hands about 2K back to the dictionary.
 
+Hi-res page 2 used to sit at `$4000` as a would-be back buffer; the OS needs
+the room more than it needs double buffering.
+
 Zero page: `$00-$4F` is left alone (the monitor's text window state and DOS's
-RWTS live there, and we call both). `$50-$CF` was Applesoft's, and Forth
-replaces Applesoft, so it is all ours.
+RWTS live there, and we call both). `$50-$DF` was Applesoft's, and Forth
+replaces Applesoft, so it is all ours. The data stack occupies `$50-$9F` and
+**`$A0-$AF` is a deliberate gap** — the deepest primitive reaches `7,X`, so an
+empty-stack fetch lands in the gap rather than on `IP`. Without it, `@` on an
+empty stack stores its result *into* `IP` and the inner interpreter jumps
+somewhere random: a mistyped line has to produce an error, not a crash.
 
 ## Bootstrap cost
 
-Boot is about 28 emulated seconds, and roughly two thirds of that is
-compiling the embedded Forth source. `FindWord` is a linear scan of a
-118-entry linked list — about 8 ms per token — and the bootstrap is well over
-a thousand tokens. Nothing is wrong; it is just an unindexed dictionary.
+Boot is about 32 emulated seconds, and roughly two thirds of that is
+compiling `system.fth`. `FindWord` is a linear scan of a linked list that
+reaches ~210 entries — around 10 ms per token — and the source is well over
+two thousand tokens. Nothing is wrong; it is just an unindexed dictionary.
 
 The kernel primitives are defined first, so they sit at the *tail* of the
 chain and every lookup of `+` or `@` walks the entire list. If boot time
@@ -219,10 +297,14 @@ mame apple2p -rompath ./roms -sl4 "" -gameio joy -flop1 build/forth.dsk \
   -autoboot_delay 0 -autoboot_script tools/drive.lua
 ```
 
-`START` is the frame to begin at (60 frames per emulated second; the disk boot
-plus bootstrap needs about 1700) and `GAP` is the frames between lines. Widen
-`GAP` if a line involves a repaint. Single characters work too, so the event
-loop can be driven key by key: `DRIVE='DESK;;K;; ;;J;;J;;Q'`.
+It waits for the system to actually be ready rather than guessing: the
+kernel's bootstrap source pointer (`SRC+1` at `$CF`) is non-zero while the
+built-in source is being interpreted and drops to zero when the interpreter
+turns to the keyboard — exactly when the prompt appears. `GAP` is the frames
+between lines; widen it for lines that repaint or touch the disk. Single
+characters work too, so the event loop can be driven key by key:
+`DRIVE='DESK;;K;; ;;J;;J;;Q'`. `PEEK='0x2285,0x2685'` dumps memory at the end,
+which is how the font blitter was verified byte for byte.
 
 Two flag-clobber bugs cost most of the debugging time on this system, both
 the same shape — a flag set, then an unrelated instruction between it and the
@@ -244,15 +326,22 @@ and the branch first.
 ## Build system
 
 ```
-src/*.s → ca65 → ld65 → forth.bin → a2kit → forth.dsk → MAME → PNG
+src/system.fth ─mkboot.py─┐
+roms/…341-0036.chr ─mkfont.py─┤
+                              ├→ ca65 → ld65 → forth.bin → a2kit → .dsk → MAME
+src/*.s src/*.inc ────────────┘
 ```
+
+The disk carries the OS binary, an Applesoft greeting that sets `MAXFILES 1`
+and `BRUN`s it, `SYSTEM.FTH` (the OS's own source), and a `README` — so the
+explorer has a real catalog to browse.
 
 | knob | default | meaning |
 |---|---|---|
 | `PROG` | `forth` | output binary/disk name |
 | `SRCDIR` | `src` | which directory to assemble |
-| `ORG` | `0x6000` | load address |
-| `SECS` | `32` | emulated seconds before auto-exit |
+| `ORG` | `0x4000` | load address |
+| `SECS` | `32` | emulated seconds before auto-exit (boot needs ~32) |
 
 ```bash
 make run                                          # the Forth system
