@@ -1024,4 +1024,4 @@ W_BACKSLASH:
 
         prim    "BYE", W_BYE, 0
         jsr     HgrText
-        jmp     $03D0                   ; DOS 3.3 re-entry
+        jmp     MONITOR                 ; there is no DOS to go back to now
