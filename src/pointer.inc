@@ -245,34 +245,38 @@ PtrClamp:
         sta     1,x
         NEXT
 
-; MREAD -- move the pointer to wherever the joystick is pointing.  The paddle
-; range 0..255 is mapped onto the 552x184 pointer area: x scales by 17/8,
+; MREAD -- move the pointer to wherever the stick is pointing.
+;
+; One paddle per call, alternating.  The 558 timer in the game port shares a
+; discharge between channels, so reading paddle 1 immediately after paddle 0
+; returns a value skewed by the first -- worst when the second reading is the
+; smaller, which is why the pointer only misbehaved low on the screen.  The
+; y coordinate jittered between the true value and a corrupted one, and an
+; arrow drawn and erased at two places faster than the display settles looks
+; exactly like a second cursor.
+;
+; Alternating also halves the time a pass spends in PREAD, which the event
+; loop notices: PREAD is a timing loop that can take three milliseconds.
+;
+; The paddle range 0..255 maps onto the 552x184 pointer area: x by 17/8,
 ; y by 3/4.
-; MREAD only moves the pointer when the stick has actually moved.  Polling it
-; every time round the event loop otherwise fights the keyboard: an idle
-; joystick reads a constant and would drag the arrow straight back.
         prim    "MREAD", W_MREAD, 0
-        stx     XSAV
+        lda     MAXIS
+        eor     #$01
+        sta     MAXIS
+        beq     @yaxis
+
+        stx     XSAV                    ; x from paddle 0
         ldx     #0
         jsr     PREAD
-        sty     PTMP                    ; paddle 0 -> x
-        ldx     #1
-        jsr     PREAD
-        sty     PTMP+1                  ; paddle 1 -> y
         ldx     XSAV
-        lda     PTMP                    ; unchanged since last poll?
+        sty     PTMP
+        lda     PTMP
         cmp     PLASTX
-        bne     @moved
-        lda     PTMP+1
-        cmp     PLASTY
-        bne     @moved
-        NEXT
-@moved: lda     PTMP
+        beq     @same
         sta     PLASTX
-        lda     PTMP+1
-        sta     PLASTY
         jsr     PtrHide
-        lda     PTMP                    ; x = 2*p0 + p0/8, i.e. 17/8
+        lda     PTMP                    ; x = 2*p + p/8
         lsr     a
         lsr     a
         lsr     a
@@ -290,8 +294,20 @@ PtrClamp:
         lda     PX+1
         adc     #0
         sta     PX+1
-        lda     PTMP+1                  ; y = p1/2 + p1/4, i.e. 3/4,
-        lsr     a                       ; which takes 0..255 to 0..191
+        jmp     @done
+
+@yaxis: stx     XSAV                    ; y from paddle 1
+        ldx     #1
+        jsr     PREAD
+        ldx     XSAV
+        sty     PTMP+1
+        lda     PTMP+1
+        cmp     PLASTY
+        beq     @same
+        sta     PLASTY
+        jsr     PtrHide
+        lda     PTMP+1                  ; y = p/2 + p/4
+        lsr     a
         sta     PY
         lda     PTMP+1
         lsr     a
@@ -299,6 +315,7 @@ PtrClamp:
         clc
         adc     PY
         sta     PY
-        jsr     PtrClamp
+
+@done:  jsr     PtrClamp
         jsr     PtrShow
-        NEXT
+@same:  NEXT
