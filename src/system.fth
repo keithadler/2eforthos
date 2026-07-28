@@ -95,6 +95,15 @@ VARIABLE NFILE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 : TTYPE 0 DO DUP I + C@ 127 AND TEMIT LOOP DROP ;
 : TDIG 48 + TEMIT ;
 : T3 DUP 100 / TDIG DUP 10 / 10 MOD TDIG 10 MOD TDIG ;
+\ Signed, no leading zeros: digits come out backwards so they go to a buffer
+\ first.  T3 above is fixed-width for the size column; this is for the
+\ calculator, where 7 and 1000000 must both look right.
+CREATE NBUF 8 ALLOT  VARIABLE NLEN
+: T# DUP 0< IF 45 TEMIT NEGATE THEN
+  0 NLEN !
+  BEGIN 10 U/MOD SWAP 48 + NBUF NLEN @ + C! 1 NLEN +! DUP 0= UNTIL DROP
+  NLEN @ 0 DO NBUF NLEN @ 1- I - + C@ TEMIT LOOP ;
+
 : FTYPE 127 AND
   DUP 4 = IF DROP 66 EXIT THEN
   DUP 2 = IF DROP 65 EXIT THEN
@@ -205,13 +214,53 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
   0 0 TAT -1 TINV T." 2E FORTH OS  V0.5   560X192 DOUBLE HI-RES"
   67 0 TAT T." FREE " NFREE @ T3 0 TINV ;
 
+\ --- desktop icons ---------------------------------------------------------
+\ Four bytes each: byte column, top raster row, which bitmap, and what a
+\ double click opens.  Icons sit on even byte columns because a 14-pixel icon
+\ is two screen bytes and lands there without shifting.
+3 CONSTANT NICON
+CREATE ICONS
+  70 C, 24 C, 0 C, 1 C,
+  70 C, 64 C, 1 C, 2 C,
+  70 C, 104 C, 2 C, 3 C,
+: IREC 4 * ICONS + ;
+: I.COL IREC C@ ;
+: I.ROW IREC 1+ C@ ;
+: I.PIC IREC 2 + C@ ;
+: I.ACT IREC 3 + C@ ;
+VARIABLE ISEL
+: ILABEL DUP I.COL OVER I.ROW 16 + 8 / TAT
+  DUP ISEL @ = TINV
+  I.PIC DUP 0 = IF DROP T." CALC" ELSE
+        DUP 1 = IF DROP T." DISK" ELSE DROP T." INFO" THEN THEN
+  0 TINV ;
+: DRAWICONS NICON 0 DO I I.COL I I.ROW I I.PIC ICON I ILABEL LOOP ;
+VARIABLE IFOUND
+: ICONHIT -1 IFOUND !
+  NICON 0 DO
+    PTRX I I.COL 7 * < 0=
+    PTRX I I.COL 7 * 14 + < AND
+    PTRY I I.ROW < 0= AND
+    PTRY I I.ROW 24 + < AND
+    IF I IFOUND ! THEN LOOP IFOUND @ ;
+
+\ Broken cycles: PAINT must redraw the calculator, but the calculator needs
+\ REPAINT, which needs PAINT.  Likewise CLICK opens an application defined
+\ further down.  Both go through a vector that is filled in later.
+VARIABLE CALCON
+VARIABLE 'CDRAW  VARIABLE 'OPEN
+: DRAWCALC 'CDRAW @ DUP IF EXECUTE ELSE DROP THEN ;
+: OPENAPP 'OPEN @ DUP IF EXECUTE ELSE 2DROP THEN ;
+
 \ --- painting --------------------------------------------------------------
 \ No backing store: everything is redrawn back to front, which is what makes
 \ overlap and z-order free.
 : PAINT 2 HCOLOR 0 559 0 191 HBOX MENUBAR
   NWIN @ 0 DO
     I .X1 @ I .X2 @ I .Y1 @ I .Y2 @ WINDOW
-    I 0= IF EXPLORER THEN LOOP ;
+    I 0= IF EXPLORER THEN LOOP
+  DRAWICONS
+  CALCON @ IF DRAWCALC THEN ;
 : REPAINT PTRHIDE PAINT PTRSHOW ;
 
 \ --- hit testing -----------------------------------------------------------
@@ -239,9 +288,30 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
   DY @ SWAP .Y1 +!  DY @ SWAP .Y2 +! ;
 : CLOSEW -1 NWIN +! -1 GRAB ! ;
 
+\ Two clicks close together in time and place.  There is no clock in this
+\ machine, so "close in time" is counted in event loop passes -- roughly 150
+\ a second, which makes 40 about a quarter of a second.
+VARIABLE LASTCLK VARIABLE LASTCX VARIABLE LASTCY
+\ Counted in event loop passes, of which there are on the order of a hundred
+\ and fifty a second.  A whole-desktop repaint is a single pass that takes
+\ half a second, which is why selecting an icon redraws only the icons: a
+\ repaint between the two clicks stalls the count and swallows the second
+\ keypress before the loop can read it.
+150 CONSTANT DCLICK
+: NEAR? - ABS 14 < ;
+: DOUBLE? TICKS LASTCLK @ - DCLICK <
+  PTRX LASTCX @ NEAR? AND
+  PTRY LASTCY @ NEAR? AND ;
+: MARKCLK TICKS LASTCLK ! PTRX LASTCX ! PTRY LASTCY ! ;
+
 \ Window 0 is the explorer: clicking it selects a file rather than raising or
 \ dragging, which is also why it never leaves the back of the z-order.
 : CLICK GRAB @ 0< 0= IF -1 GRAB ! EXIT THEN
+  ICONHIT DUP 0< 0= IF
+    DUP ISEL !
+    DOUBLE? IF I.ACT OPENAPP ELSE DROP PTRHIDE DRAWICONS PTRSHOW THEN
+    MARKCLK EXIT THEN
+  DROP MARKCLK
   PTRX PTRY HIT DUP 0< IF DROP EXIT THEN
   DUP 0= IF DROP EPICK REPAINT EXIT THEN
   RAISE NWIN @ 1-
@@ -254,9 +324,46 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
 : PSTEP 2DUP PMOVE
   GRAB @ 0< IF 2DROP EXIT THEN WSHIFT REPAINT ;
 
+\ --- the calculator --------------------------------------------------------
+\ The shape every four-function calculator has: digits accumulate into ENT,
+\ an operator pushes ENT into ACC and is remembered, = applies it.
+VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
+154 CONSTANT CX1  350 CONSTANT CX2  40 CONSTANT CY1  128 CONSTANT CY2
+: CDIGITS CX1 7 / 2 + CY1 24 + 8 / TAT T."             "
+  CX1 7 / 2 + CY1 24 + 8 / TAT ENT @ T# ;
+: CDRAW CX1 CX2 CY1 CY2 WINDOW
+  CX1 7 / 2 + CY1 8 / TAT -1 TINV T." CALCULATOR" 0 TINV
+  3 HCOLOR CX1 8 + CX2 8 - CY1 20 + CY1 36 + HFRAME
+  CDIGITS
+  CX1 7 / 2 + CY2 32 - 8 / TAT T." 0-9  + - * /  = C"
+  CX1 7 / 2 + CY2 24 - 8 / TAT T." Q CLOSES IT" ;
+: CCLEAR 0 ACC ! 0 ENT ! 0 OP ! -1 FRESH ! ;
+: CAPPLY OP @ 0 = IF ENT @ ACC ! EXIT THEN
+  OP @ 43 = IF ACC @ ENT @ + ACC ! EXIT THEN
+  OP @ 45 = IF ACC @ ENT @ - ACC ! EXIT THEN
+  OP @ 42 = IF ACC @ ENT @ * ACC ! EXIT THEN
+  OP @ 47 = IF ENT @ 0= IF 0 ACC ! ELSE ACC @ ENT @ / ACC ! THEN THEN ;
+: CDIGIT 48 - FRESH @ IF 0 ENT ! 0 FRESH ! THEN ENT @ 10 * + ENT ! ;
+: COP CAPPLY OP ! ACC @ ENT ! -1 FRESH ! ;
+: CEQ CAPPLY 0 OP ! ACC @ ENT ! -1 FRESH ! ;
+: CKEY DUP 47 > OVER 58 < AND IF CDIGIT CDIGITS EXIT THEN
+  DUP 43 = OVER 45 = OR OVER 42 = OR OVER 47 = OR
+    IF COP CDIGITS EXIT THEN
+  DUP 61 = IF DROP CEQ CDIGITS EXIT THEN
+  DUP 67 = IF DROP CCLEAR CDIGITS EXIT THEN
+  DUP 81 = IF DROP 0 CALCON ! REPAINT EXIT THEN
+  DROP ;
+: CALC CCLEAR -1 CALCON ! CDRAW ;
+: DOOPEN DUP 1 = IF DROP CALC EXIT THEN
+  DUP 2 = IF DROP 0 ESEL ! 0 ETOP ! REPAINT EXIT THEN
+  DROP ;
+' CDRAW 'CDRAW !
+' DOOPEN 'OPEN !
+
 \ --- the event loop --------------------------------------------------------
 10 CONSTANT STEP  VARIABLE RUNF VARIABLE BTNW
 : EVENT KEYC
+  CALCON @ IF CKEY EXIT THEN
   DUP 73 = IF 0 STEP NEGATE PSTEP THEN
   DUP 75 = IF 0 STEP PSTEP THEN
   DUP 74 = IF STEP NEGATE 0 PSTEP THEN
@@ -275,8 +382,8 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
 : MOUSE MREAD
   BTN BTNW @ 0= AND IF CLICK THEN
   BTN BTNW ! ;
-: DESK -1 RUNF ! 0 BTNW ! REPAINT
-  BEGIN RUNF @ WHILE MOUSE KEY? IF EVENT THEN REPEAT
+: DESK -1 RUNF ! 0 BTNW ! 0 CALCON ! -1 ISEL ! 0 LASTCLK ! REPAINT
+  BEGIN RUNF @ WHILE TICK MOUSE KEY? IF EVENT THEN REPEAT
   PTRHIDE TEXT ;
 
 \ --- boot ------------------------------------------------------------------
@@ -290,7 +397,7 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
   CATLOAD FREE NFREE !
   60000 0 DO LOOP ;
 : DESKTOP HGR 0 NWIN ! -1 GRAB ! 0 ESEL ! 0 ETOP !
-  8 392 16 184 ADDWIN
-  400 551 40 140 ADDWIN
+  8 340 16 184 ADDWIN
+  352 470 148 184 ADDWIN
   PAINT 280 96 PTRAT ;
 SPLASH DESKTOP DESK
