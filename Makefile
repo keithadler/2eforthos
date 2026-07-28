@@ -28,6 +28,10 @@ DISKFILES := $(wildcard disk/*)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/bootsrc.inc
+LOADER  := build/loader.bin
+# What the disk's greeting runs.  The Forth build goes through the fast
+# loader; other builds BRUN their own binary directly.
+GREETRUN ?= LOADER
 OBJS    := $(patsubst $(SRCDIR)/%.s,build/%.o,$(SRCS))
 BIN     := build/$(PROG).bin
 DSK     := build/$(PROG).dsk
@@ -45,9 +49,13 @@ MONITOR ?= 4
 # Emulation speed multiplier for `make gui`, e.g. SPEED=8 to boot quickly.
 # Empty means true 1 MHz.
 SPEED ?=
+# Window size as a multiple of the emulated screen.  MAME keeps the aspect
+# ratio, so this is the box it fits the picture into.
+SCALE ?= 2
 MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
                -window -nomaximize -snapshot_directory $(SHOTS) \
-               -cfg_directory $(CURDIR)/cfg
+               -cfg_directory $(CURDIR)/cfg -mouse \
+               -resolution $(shell echo $$((560*$(SCALE))))x$(shell echo $$((384*$(SCALE))))
 
 .PHONY: all roms disk run gui poke monitor clean
 
@@ -79,17 +87,25 @@ roms/apple2p/341-0036.chr:
 build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
 	ca65 -g -I src -I build -D DOS=1 -l build/$*.lst $< -o $@
 
+# The fast loader is a separate program: BRUN by the greeting, it reads the
+# kernel's sectors itself rather than going through DOS's file manager.
+$(LOADER): boot/loader.s src/apple2.cfg | build
+	ca65 -g -I src boot/loader.s -o build/loader.o
+	ld65 -C src/apple2.cfg -S 0x0800 -o $@ build/loader.o
+	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
+
 $(BIN): $(OBJS) src/apple2.cfg
 	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
 disk: $(DSK)
 
-$(DSK): $(BIN)
+$(DSK): $(BIN) $(LOADER)
 	@rm -f $@
 	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -b -d $@
 	$(A2KIT) put -d $@ -f $(DOSNAME) -t bin -a $$(( $(ORG) )) < $(BIN)
-	@printf '10 PRINT CHR$$(4);"MAXFILES 1"\n20 PRINT CHR$$(4);"BRUN %s"\n' '$(DOSNAME)' \
+	@$(A2KIT) put -d $@ -f LOADER -t bin -a 2048 < $(LOADER)
+	@printf '10 PRINT CHR$$(4);"MAXFILES 1"\n20 PRINT CHR$$(4);"BRUN %s"\n' '$(GREETRUN)' \
 	  | $(A2KIT) tokenize -t atxt -a 2049 \
 	  | $(A2KIT) put -d $@ -f HELLO -t atok
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth

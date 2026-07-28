@@ -297,6 +297,34 @@ empty-stack fetch lands in the gap rather than on `IP`. Without it, `@` on an
 empty stack stores its result *into* `IP` and the inner interpreter jumps
 somewhere random: a mistyped line has to produce an error, not a crash.
 
+## Boot cost, measured
+
+Boot is about 30 emulated seconds. The breakdown, measured rather than
+assumed — and the assumptions were wrong twice:
+
+| stage | |
+|---|---|
+| ~24s | **DOS 3.3 booting.** A disk whose greeting `BRUN`s a *2-sector* binary takes just as long as one loading the 15K kernel, on both `apple2ee` and `apple2p`. This dominates everything. |
+| ~4s | loading the kernel |
+| ~11s | compiling `system.fth` |
+
+Two attempts at this are worth recording because both were aimed at the wrong
+thing:
+
+- **Indexing the dictionary** (below) cut compiling from ~28s to ~11s. Real,
+  but it only ever addressed the smallest slice.
+- **`boot/loader.s`** bypasses DOS's file manager, reading the catalog, the
+  track/sector list and the data sectors itself through RWTS. It works and it
+  is a prerequisite for ever dropping DOS — but it produced no measurable
+  gain, because loading was never the cost.
+
+**The real fix is not to boot DOS at all**: a custom boot sector that pulls
+the kernel straight off track 0. That would also hand back the 10K DOS
+occupies at `$9600-$BFFF`. The cost is losing RWTS, so the disk code would
+need its own sector reader.
+
+Until then, `make gui SPEED=8` boots in about four seconds.
+
 ## Bootstrap cost
 
 Boot is about 32 emulated seconds, and roughly two thirds of that is

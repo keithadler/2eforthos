@@ -248,8 +248,10 @@ PtrClamp:
 ; MREAD -- move the pointer to wherever the joystick is pointing.  The paddle
 ; range 0..255 is mapped onto the 552x184 pointer area: x scales by 17/8,
 ; y by 3/4.
+; MREAD only moves the pointer when the stick has actually moved.  Polling it
+; every time round the event loop otherwise fights the keyboard: an idle
+; joystick reads a constant and would drag the arrow straight back.
         prim    "MREAD", W_MREAD, 0
-        jsr     PtrHide
         stx     XSAV
         ldx     #0
         jsr     PREAD
@@ -258,6 +260,18 @@ PtrClamp:
         jsr     PREAD
         sty     PTMP+1                  ; paddle 1 -> y
         ldx     XSAV
+        lda     PTMP                    ; unchanged since last poll?
+        cmp     PLASTX
+        bne     @moved
+        lda     PTMP+1
+        cmp     PLASTY
+        bne     @moved
+        NEXT
+@moved: lda     PTMP
+        sta     PLASTX
+        lda     PTMP+1
+        sta     PLASTY
+        jsr     PtrHide
         lda     PTMP                    ; x = 2*p0 + p0/8, i.e. 17/8
         lsr     a
         lsr     a
