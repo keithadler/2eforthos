@@ -1,4 +1,6 @@
-# A2FORTH OS
+# 2E FORTH OS
+
+(C) 2026 Keith Adler
 
 A Forth system with a **560x192 monochrome double hi-res** driver and a
 pointer-driven windowing environment, running on an emulated Apple //e.
