@@ -248,6 +248,7 @@ VARIABLE IFOUND
 \ REPAINT, which needs PAINT.  Likewise CLICK opens an application defined
 \ further down.  Both go through a vector that is filled in later.
 VARIABLE CALCON
+VARIABLE CALCWIN                        \ which window the calculator is, or -1
 VARIABLE 'CDRAW  VARIABLE 'OPEN
 : DRAWCALC 'CDRAW @ DUP IF EXECUTE ELSE DROP THEN ;
 : OPENAPP 'OPEN @ DUP IF EXECUTE ELSE 2DROP THEN ;
@@ -258,9 +259,9 @@ VARIABLE 'CDRAW  VARIABLE 'OPEN
 : PAINT 2 HCOLOR 0 559 0 191 HBOX MENUBAR
   NWIN @ 0 DO
     I .X1 @ I .X2 @ I .Y1 @ I .Y2 @ WINDOW
-    I 0= IF EXPLORER THEN LOOP
-  DRAWICONS
-  CALCON @ IF DRAWCALC THEN ;
+    I 0= IF EXPLORER THEN
+    I CALCWIN @ = IF DRAWCALC THEN LOOP
+  DRAWICONS ;
 : REPAINT PTRHIDE PAINT PTRSHOW ;
 
 \ --- hit testing -----------------------------------------------------------
@@ -282,11 +283,32 @@ VARIABLE HX0 VARIABLE HY0 VARIABLE HN VARIABLE FOUND
   WTMP NWIN @ 1- W' 10 CMOVE ;
 
 \ --- dragging and clicking -------------------------------------------------
-VARIABLE GRAB VARIABLE DX VARIABLE DY
-: WSHIFT DY ! DX ! GRAB @ DUP DUP DUP
-  DX @ SWAP .X1 +!  DX @ SWAP .X2 +!
-  DY @ SWAP .Y1 +!  DY @ SWAP .Y2 +! ;
-: CLOSEW -1 NWIN +! -1 GRAB ! ;
+VARIABLE GRAB
+
+\ A repaint of the whole desktop is a single pass of the event loop and takes
+\ about half a second, so a window cannot be redrawn at every step of a drag.
+\ What follows the pointer instead is an XORed outline: four lines to draw,
+\ and the same four to erase, because XOR is its own inverse.  The window
+\ itself moves once, when the button comes back up.
+VARIABLE BX1 VARIABLE BX2 VARIABLE BY1 VARIABLE BY2 VARIABLE BSHOWN
+: BFRAME 3 HCOLOR -1 HXOR
+  BX1 @ BX2 @ BY1 @ BY2 @ HFRAME  0 HXOR ;
+\ The arrow is XORed in too, and two XORs over the same pixel cancel, so it
+\ comes off the screen before the outline is touched.
+: BFLIP PTRHIDE BFRAME PTRSHOW ;
+: BSHOW BSHOWN @ IF EXIT THEN BFLIP -1 BSHOWN ! ;
+: BHIDE BSHOWN @ 0= IF EXIT THEN BFLIP 0 BSHOWN ! ;
+: BSET GRAB @ DUP .X1 @ BX1 ! DUP .X2 @ BX2 !
+  DUP .Y1 @ BY1 ! .Y2 @ BY2 ! ;
+: BMOVE SWAP DUP BX1 +! BX2 +!  DUP BY1 +! BY2 +! ;
+: BDRAG BHIDE BMOVE BSHOW ;
+: BCOMMIT GRAB @
+  DUP BX1 @ SWAP .X1 !  DUP BX2 @ SWAP .X2 !
+  DUP BY1 @ SWAP .Y1 !      BY2 @ SWAP .Y2 ! ;
+: BDROP BHIDE BCOMMIT -1 GRAB ! REPAINT ;
+
+: CLOSEW -1 NWIN +! -1 GRAB !
+  NWIN @ CALCWIN @ = IF -1 CALCWIN ! 0 CALCON ! THEN ;
 
 \ Two clicks close together in time and place.  There is no clock in this
 \ machine, so "close in time" is counted in event loop passes -- roughly 150
@@ -306,7 +328,7 @@ VARIABLE LASTCLK VARIABLE LASTCX VARIABLE LASTCY
 
 \ Window 0 is the explorer: clicking it selects a file rather than raising or
 \ dragging, which is also why it never leaves the back of the z-order.
-: CLICK GRAB @ 0< 0= IF -1 GRAB ! EXIT THEN
+: CLICK GRAB @ 0< 0= IF BDROP EXIT THEN
   ICONHIT DUP 0< 0= IF
     DUP ISEL !
     DOUBLE? IF I.ACT OPENAPP ELSE DROP PTRHIDE DRAWICONS PTRSHOW THEN
@@ -317,26 +339,33 @@ VARIABLE LASTCLK VARIABLE LASTCX VARIABLE LASTCY
   RAISE NWIN @ 1-
   DUP INTITLE? IF
     DUP INCLOSE? IF DROP CLOSEW REPAINT EXIT THEN
-    GRAB ! REPAINT EXIT THEN
+    GRAB ! REPAINT BSET BSHOW EXIT THEN
   DROP REPAINT ;
 
 : PMOVE PTRY + SWAP PTRX + SWAP PTRAT ;
 : PSTEP 2DUP PMOVE
-  GRAB @ 0< IF 2DROP EXIT THEN WSHIFT REPAINT ;
+  GRAB @ 0< IF 2DROP EXIT THEN BDRAG ;
 
 \ --- the calculator --------------------------------------------------------
 \ The shape every four-function calculator has: digits accumulate into ENT,
 \ an operator pushes ENT into ACC and is remembered, = applies it.
+\ The calculator is a window in the list, not a picture drawn at fixed
+\ coordinates.  That is what makes it draggable: HIT only knows about windows
+\ in the list, so anything drawn outside it can never be picked up, raised or
+\ closed.  Its contents are laid out from the window's current rectangle, so
+\ they follow when it moves.
 VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
-154 CONSTANT CX1  350 CONSTANT CX2  40 CONSTANT CY1  128 CONSTANT CY2
-: CDIGITS CX1 7 / 2 + CY1 24 + 8 / TAT T."             "
-  CX1 7 / 2 + CY1 24 + 8 / TAT ENT @ T# ;
-: CDRAW CX1 CX2 CY1 CY2 WINDOW
-  CX1 7 / 2 + CY1 8 / TAT -1 TINV T." CALCULATOR" 0 TINV
-  3 HCOLOR CX1 8 + CX2 8 - CY1 20 + CY1 36 + HFRAME
+VARIABLE CCX1 VARIABLE CCX2 VARIABLE CCY1 VARIABLE CCY2
+: CGEOM CALCWIN @ DUP .X1 @ CCX1 ! DUP .X2 @ CCX2 !
+  DUP .Y1 @ CCY1 ! .Y2 @ CCY2 ! ;
+: CDIGITS CCX1 @ 7 / 2 + CCY1 @ 24 + 8 / TAT T."             "
+  CCX1 @ 7 / 2 + CCY1 @ 24 + 8 / TAT ENT @ T# ;
+: CDRAW CALCWIN @ 0< IF EXIT THEN CGEOM
+  CCX1 @ 7 / 2 + CCY1 @ 8 / TAT -1 TINV T." CALCULATOR" 0 TINV
+  3 HCOLOR CCX1 @ 8 + CCX2 @ 8 - CCY1 @ 20 + CCY1 @ 36 + HFRAME
   CDIGITS
-  CX1 7 / 2 + CY2 32 - 8 / TAT T." 0-9  + - * /  = C"
-  CX1 7 / 2 + CY2 24 - 8 / TAT T." Q CLOSES IT" ;
+  CCX1 @ 7 / 2 + CCY2 @ 32 - 8 / TAT T." 0-9  + - * /  = C"
+  CCX1 @ 7 / 2 + CCY2 @ 24 - 8 / TAT T." Q CLOSES IT" ;
 : CCLEAR 0 ACC ! 0 ENT ! 0 OP ! -1 FRESH ! ;
 : CAPPLY OP @ 0 = IF ENT @ ACC ! EXIT THEN
   OP @ 43 = IF ACC @ ENT @ + ACC ! EXIT THEN
@@ -346,14 +375,19 @@ VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
 : CDIGIT 48 - FRESH @ IF 0 ENT ! 0 FRESH ! THEN ENT @ 10 * + ENT ! ;
 : COP CAPPLY OP ! ACC @ ENT ! -1 FRESH ! ;
 : CEQ CAPPLY 0 OP ! ACC @ ENT ! -1 FRESH ! ;
+: CCLOSE -1 NWIN +! -1 CALCWIN ! 0 CALCON ! REPAINT ;
 : CKEY DUP 47 > OVER 58 < AND IF CDIGIT CDIGITS EXIT THEN
   DUP 43 = OVER 45 = OR OVER 42 = OR OVER 47 = OR
     IF COP CDIGITS EXIT THEN
   DUP 61 = IF DROP CEQ CDIGITS EXIT THEN
   DUP 67 = IF DROP CCLEAR CDIGITS EXIT THEN
-  DUP 81 = IF DROP 0 CALCON ! REPAINT EXIT THEN
+  DUP 81 = IF DROP CCLOSE EXIT THEN
   DROP ;
-: CALC CCLEAR -1 CALCON ! CDRAW ;
+: CALC CALCON @ IF EXIT THEN
+  CCLEAR
+  154 350 40 128 ADDWIN
+  NWIN @ 1- CALCWIN !
+  -1 CALCON ! REPAINT ;
 : DOOPEN DUP 1 = IF DROP CALC EXIT THEN
   DUP 2 = IF DROP 0 ESEL ! 0 ETOP ! REPAINT EXIT THEN
   DROP ;
@@ -363,7 +397,9 @@ VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
 \ --- the event loop --------------------------------------------------------
 10 CONSTANT STEP  VARIABLE RUNF VARIABLE BTNW
 : EVENT KEYC
-  CALCON @ IF CKEY EXIT THEN
+  CALCON @ IF
+    DUP 73 = OVER 74 = OR OVER 75 = OR OVER 76 = OR OVER 32 = OR 0=
+    IF CKEY EXIT THEN THEN
   DUP 73 = IF 0 STEP NEGATE PSTEP THEN
   DUP 75 = IF 0 STEP PSTEP THEN
   DUP 74 = IF STEP NEGATE 0 PSTEP THEN
@@ -379,7 +415,15 @@ VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
 \ Poll the game port every time round: MREAD ignores an unmoved stick, so the
 \ keyboard still works when nothing is plugged in.  The button fires CLICK on
 \ its press edge only, not for as long as it is held.
-: MOUSE MREAD
+\ MREAD moves the arrow itself, so the drag has to be worked out from where
+\ the arrow ended up rather than from a step the caller asked for.  Without
+\ this a window could be picked up with the mouse but never carried: only the
+\ keyboard's PSTEP moved what was held.
+VARIABLE OPX VARIABLE OPY
+: MOUSE PTRX OPX ! PTRY OPY ! MREAD
+  GRAB @ 0< 0= IF
+    PTRX OPX @ -  PTRY OPY @ -
+    2DUP OR IF BDRAG ELSE 2DROP THEN THEN
   BTN BTNW @ 0= AND IF CLICK THEN
   BTN BTNW ! ;
 : DESK -1 RUNF ! 0 BTNW ! 0 CALCON ! -1 ISEL ! 0 LASTCLK ! REPAINT
@@ -396,7 +440,8 @@ VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
   30 19 TAT T." READING CATALOG..."
   CATLOAD FREE NFREE !
   60000 0 DO LOOP ;
-: DESKTOP HGR 0 NWIN ! -1 GRAB ! 0 ESEL ! 0 ETOP !
+: DESKTOP HGR 0 NWIN ! -1 GRAB ! 0 BSHOWN ! 0 HXOR
+  0 ESEL ! 0 ETOP ! -1 CALCWIN ! 0 CALCON !
   8 340 16 184 ADDWIN
   PAINT 280 96 PTRAT ;
 SPLASH DESKTOP DESK

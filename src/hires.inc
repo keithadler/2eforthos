@@ -242,9 +242,13 @@ MergeByte:
         bcc     @go
 @main:  bit     MAINSEL
 @go:    ldy     HBYTE
-        lda     (HBASE),y
+        bit     HXORF                   ; XOR mode leaves out the read, so the
+        bmi     @xorm                   ; masked bits flip rather than take
+        lda     (HBASE),y               ; the pattern
         eor     HCOLB
-        and     HMASK
+        jmp     @merge
+@xorm:  lda     HCOLB
+@merge: and     HMASK
         eor     (HBASE),y
         and     #$7F                    ; bit 7 is not a pixel
         sta     (HBASE),y
@@ -355,6 +359,11 @@ HgrHLine:
 @midB:  lda     HCOLO
 @midput:
         ldy     HBYTE
+        bit     HXORF                   ; the whole bytes in the middle of a
+        bpl     @midset                 ; span skip MergeByte, so XOR mode has
+        eor     (HBASE),y               ; to be honoured here as well
+        and     #$7F
+@midset:
         sta     (HBASE),y
         inc     HCOLN
         bne     @mid
