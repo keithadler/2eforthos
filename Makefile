@@ -15,6 +15,10 @@ PROG    ?= forth
 SRCDIR  ?= src
 ORG     ?= 0x4000
 VOLUME  ?= 254
+# Sectors the loader steps between reads.  Must be coprime with 16 so that
+# stepping still visits every sector.  Wider costs revolutions per track but
+# gives the six-and-two decode time to finish before the next one arrives.
+ILEAVE  ?= 5
 SECS    ?= 42
 
 A2KIT   := $(HOME)/.cargo/bin/a2kit
@@ -90,8 +94,9 @@ build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
 # The boot loader replaces DOS entirely.  It has to know how big the kernel
 # is, so that comes from the linked binary.
 build/kernsecs.inc: $(BIN) | build
-	@printf 'KERNSECS = %s\n' \
-	  $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) > $@
+	@printf 'KERNSECS = %s\nKERNILEAVE = %s\n' \
+	  $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) '$(ILEAVE)' > $@
+	@echo "kernel is $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) sectors, interleave $(ILEAVE)"
 
 $(BOOT1): boot/boot1.s build/kernsecs.inc src/d2core.inc src/apple2.cfg | build
 	ca65 -g -I src -I build boot/boot1.s -o build/boot1.o
@@ -99,7 +104,7 @@ $(BOOT1): boot/boot1.s build/kernsecs.inc src/d2core.inc src/apple2.cfg | build
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
 
 $(BIN): $(OBJS) src/apple2.cfg
-	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -o $@ $(OBJS)
+	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
 disk: $(DSK)
@@ -110,7 +115,7 @@ $(DSK): $(BIN) $(BOOT1)
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
 	@for f in $(DISKFILES); do \
 	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
-	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN)
+	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE)
 	@$(A2KIT) catalog -d $@
 
 # -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)

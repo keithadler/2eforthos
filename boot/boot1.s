@@ -42,6 +42,7 @@ LTRK    = $F0
 LSEC    = $F1
 LCNT    = $F2                   ; 2, sectors still to load
 LDEST   = $F4                   ; 2
+LCHUNK  = $F6                   ; sectors done on this track
 
         .segment "STARTUP"
 
@@ -61,6 +62,7 @@ Start:
         sta     LTRK
         lda     #0
         sta     LSEC
+        sta     LCHUNK
 
         lda     #<KERNSECS              ; how many sectors to move
         sta     LCNT
@@ -89,12 +91,26 @@ Start:
         cmp     #0
         bne     Failed
 
+        ; Sectors are taken three apart rather than consecutively.  Decoding
+        ; six-and-two takes longer than the 12.5ms between one sector and the
+        ; next, so reading 0,1,2,... misses every time and waits a whole
+        ; revolution -- about three sectors a second.  Stepping by three gives
+        ; the decode time to finish and still covers all sixteen, because 3
+        ; and 16 are coprime, in three revolutions instead of sixteen.
         inc     LDEST+1                 ; one sector is one page
-        inc     LSEC
         lda     LSEC
+        clc
+        adc     #KERNILEAVE
+        cmp     #16
+        bcc     :+
+        sbc     #16
+:       sta     LSEC
+        inc     LCHUNK
+        lda     LCHUNK
         cmp     #16
         bcc     @count
         lda     #0
+        sta     LCHUNK
         sta     LSEC
         inc     LTRK
 
