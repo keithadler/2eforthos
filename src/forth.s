@@ -117,7 +117,8 @@ PTMP:    .word  0
 PXTMP:   .word  0                       ; pointer byte being merged
 PLASTX:  .byte  128                     ; last analog reading, so MREAD can
 PLASTY:  .byte  128
-MAXIS:   .byte  0                       ; which paddle MREAD reads next                     ; tell a real movement from an idle one
+MAXIS:   .byte  0                       ; which paddle MREAD reads next
+PSETTLE: .byte  0                       ; which paddle MREAD reads next                     ; tell a real movement from an idle one
 
 RBUF:    .word  0                       ; sector buffer address for RWTS
 
