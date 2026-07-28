@@ -20,6 +20,8 @@ COUT1   = $FDF0                 ; the ROM's own character output
 KEYIN   = $FD1B                 ; and its key input
 CSW     = $36                   ; the monitor's output vector
 KSW     = $38                   ; and its input vector
+SETTXT  = $FB2F                 ; text mode, full window
+C3INIT  = $C300                 ; the //e's own 80-column firmware
 TIB     = $0200                 ; GETLN's line buffer is our terminal buffer
 PROMPT  = $33                   ; GETLN's prompt character
 

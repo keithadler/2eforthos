@@ -2,35 +2,38 @@
 
 (C) 2026 Keith Adler
 
-A Forth system with a **560x192 monochrome double hi-res** driver and a
-pointer-driven windowing environment, running on an emulated Apple //e.
-6502 source in, bootable DOS 3.3 floppy out.
+A Forth system that boots to an **80-column console** on an emulated Apple
+//e, with a **560x192 monochrome double hi-res** screen the language can turn
+on when a program wants it.  6502 source in, bootable floppy out — no DOS on
+the disk and none in memory.
 
 ```bash
 make roms         # rebuild the Apple ROM set (once, see Emulator below)
 make run          # assemble -> disk -> boot in MAME -> screenshot
 make gui          # same, but leaves the window up so you can drive it
-open shots/apple2p/0000.png
+open shots/apple2ee/0000.png
 ```
 
-Boot shows a splash with the OS name and version, reads the disk catalog, and
-lands **inside the desktop event loop**: a menu bar with free space, a file
-explorer listing the DOS 3.3 catalog in 80 columns, a draggable window, and an
-arrow pointer.  `Q` leaves the desktop for a Forth REPL on the 40-column text
-screen — `12 34 * .` prints `408` — and `DESK` goes back.
+Boot prints the banner, reads the disk catalog, and stops at the Forth
+prompt in 80 columns.  `12 34 * .` prints `408`.
 
-Keys in the desktop:
-
-| key | |
+| command | |
 |---|---|
-| `I` `J` `K` `L` | move the pointer |
-| space | click — select a file, raise/carry a window, or close one |
-| `T` | lock / unlock the selected file |
-| `X` | delete the selected file (refused if locked) |
-| `R` | rename it — type the new name at the prompt |
-| `U` `D` | scroll the file list |
-| `M` | read the joystick |
-| `Q` | leave the event loop |
+| `CAT` | list the disk — number, lock, name, type, size |
+| `n LOCK` | lock or unlock file *n* |
+| `n DEL` | delete it (refused if locked) |
+| `n REN` | rename it — type the new name at the prompt |
+| `WORDS` | every definition in the dictionary |
+| `HELP` | a summary of the above and the graphics words |
+
+The graphics screen is a **word, not a mode you live in**: `HGR` turns it on,
+the drawing words draw, `TEXT` comes back to the console.
+
+```forth
+HGR  3 HCOLOR  280 96 80 HCIRCLE  40 520 20 170 HFRAME
+0 0 TAT T." DRAWN FROM THE PROMPT"
+TEXT
+```
 
 **The OS writes to its own disk.** Lock, rename and delete all go through to
 the image, and MAME writes it back — delete a file inside the emulator and
@@ -38,26 +41,29 @@ the image, and MAME writes it back — delete a file inside the emulator and
 therefore boots a scratch copy so automated runs stay reproducible; `make gui`
 uses the real image, so changes you make interactively stick.
 
-Boot takes about 32 emulated seconds, most of it compiling the system's own
-Forth source (see *Bootstrap cost* below).
+Boot takes about 18 emulated seconds, most of it compiling the system's own
+Forth source (see *Boot cost* below).
 
 ## Layout
 
 | path | what |
 |---|---|
 | `src/forth.s` | top level: cold start, banner, memory map |
-| `src/system.fth` | **the OS written in Forth**: windows, explorer, event loop |
+| `src/system.fth` | **the OS written in Forth**: catalog, file commands, greeting |
 | `src/dict.inc` | dictionary format and the macros that build it |
 | `src/kernel.inc` | inner interpreter and the primitive word set |
 | `src/interp.inc` | outer interpreter, compiler, defining words |
 | `src/hires.inc` | the 280×192 screen driver |
 | `src/gwords.inc` | Forth bindings for the driver |
-| `src/pointer.inc` | XOR mouse pointer, keyboard and joystick input |
+| `src/input.inc` | keyboard and game port, as Forth words |
 | `src/text.inc` | 40x24 text on the hi-res screen |
-| `src/disk.inc` | raw sector access through DOS 3.3's RWTS |
+| `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
+| `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
 | `test/hirestest.s` | drives the graphics driver from plain assembly |
 | `examples/hello.s` | the original 31-byte hello world |
+| `tools/contest.py` | the console test suite — types Forth, checks machine state |
+| `tools/contest.lua` | the MAME side of it |
 | `tools/dumptext.lua` | dumps the text screen, zero page, and dictionary state |
 | `tools/drive.lua` | types lines into the running Forth at a pace it can keep up with |
 | `tools/fetch-roms.py` | rebuilds the MAME ROM set from AppleWin and apple2js |
@@ -90,10 +96,13 @@ holding the word to run followed by a primitive that restores `IP` and
 **The system's own source is `src/system.fth`**, converted to a byte table by
 `tools/mkboot.py` and interpreted at boot before the keyboard is read.
 Anything expressible in Forth lives there rather than in assembly — the
-windows, the explorer, the event loop, and the boot sequence itself are all
-Forth. Definitions must precede their first use, so the file reads
-bottom-up: helpers, shapes, the window list, disk, text, explorer, painting,
-input, and the boot line last.
+catalog parser, the file commands, and the greeting itself are all Forth.
+Definitions must precede their first use, so the file reads top-down:
+helpers, shapes, the catalog, the file commands, and the greeting last.
+
+One consequence worth knowing: `."` **compiles** an inline string, so at the
+top level it builds one nobody runs. The banner is a definition (`GREET`)
+that is then called.
 
 ### Word set
 
@@ -107,14 +116,14 @@ i/o       EMIT KEY CR SPACE PAGE . ."
 control   IF ELSE THEN BEGIN UNTIL AGAIN WHILE REPEAT DO LOOP I EXIT EXECUTE
 define    : ; VARIABLE CONSTANT CREATE IMMEDIATE , C, ALLOT HERE ' \
 system    STATE BASE DP LATEST WORDS BYE
-graphics  HGR TEXT HCLS HCOLOR HPLOT HLINE HVLINE HBOX
+graphics  HGR TEXT HCLS HCOLOR HXOR HPLOT HLINE HVLINE HLINE2 HBOX
+          HPOINT HCIRCLE HDISC HFRAME
 hires text TAT TEMIT TINV T."
-pointer   PTRSHOW PTRHIDE PTRAT PTRX PTRY MREAD
 input     KEY? KEYC BTN PADDLE
-disk      RSECT WSECT
+disk      DREAD DWRITE
 memory    CMOVE
-windows   HFRAME WINDOW ADDWIN PAINT REPAINT HIT RAISE CLICK PSTEP DESK
-files     CATLOAD FREE EXPLORER EPICK ESCROLL FLOCK FDEL FREN
+console   CAT LOCK DEL REN HELP GREET
+files     CATLOAD FREE
 terminal  ASKLN
 ```
 
@@ -160,48 +169,39 @@ stripes instead of grey.
 read-modify-write on the two end bytes. Both span routines order their own
 endpoints, so a reversed span can't run the fill loop off the end of a row.
 
-## The pointer
+## The console
 
-There is **no mouse**. The Apple Mouse Card was a 1984 IIe-era product, and
-MAME's `a2mouse` needs four ROMs of which only one exists in any open
-repository. The Apple ][+'s pointing device is the analog game port, so that
-is what `MREAD` reads — `PREAD` on paddles 0 and 1, scaled to the pointer
-area (x by 17/16, y by 19/32), with `BTN` for button 0. The keyboard arrows
-(IJKL) drive the same pointer, which is what the demo and the automated tests
-use.
+The //e has an 80-column driver in ROM. Entering it is `JSR $FB2F` then
+`JSR $C300`, and it costs nothing in the image: it scrolls both banks, keeps
+the cursor, and understands the monitor's control codes. It takes over `CSW`
+and `KSW`, so **nothing may set those afterwards** — `COUT` and `GETLN` reach
+the firmware through them, and writing the ROM's own vectors back there
+disconnects the console without any other symptom.
 
-The arrow is drawn by XORing an 8×8 shape into the screen and erased by XORing
-it again. XOR is self-inverse, so there is no backing store to save and
-restore, and the pointer stays legible over both the dark window interiors and
-the white title bars because it inverts whatever it covers.
+Text lives in `$0400-$07FF` in *both* banks: even columns in aux, odd in main.
+Two soft switches make that work, and both matter on the way back from
+graphics:
 
-A screen byte holds 7 pixels in bits 0–6, so an 8-pixel-wide row shifted by
-0–6 occupies at most 14 bits — always exactly two screen bytes, never three.
-That is why `PtrXor` has no third-byte case.
+- `80COL` is what makes the video hardware fetch the aux half of a row.
+- `80STORE` is what lets the firmware write it.
 
-## The windowing layer
+Clearing either on the way out of `HGR` leaves the screen showing main memory
+alone — every other character of every line, which is exactly what an
+80-column screen displayed 40 columns wide looks like. `HgrText` sets both.
 
-All of it is Forth, on top of the driver primitives.
+## The graphics screen
 
-Four records of five cells in `WINS`: `x1 x2 y1 y2` and a spare. **Array order
-is z-order** — the last record is the frontmost window. That one decision
-makes most of the rest fall out:
+There is no windowing environment. `HGR` switches the display to double
+hi-res and clears it, the drawing words draw, and `TEXT` puts the console
+back; between those two the whole 560×192 screen belongs to whatever is being
+written.
 
-- `PAINT` walks the array forward, so later windows naturally overdraw
-  earlier ones.
-- `HIT` walks it forward and keeps the *last* match, which is the frontmost
-  window under the pointer.
-- `RAISE` shuffles a record to the end of the array with `CMOVE`.
-
-**There is no backing store under a window.** Everything is redrawn back to
-front on every change, which is what makes overlap, raising, dragging, and
-closing free. The cost is a full repaint per drag step — see below.
-
-`CLICK` reads the pointer, hit-tests, raises the window, then dispatches on
-where in it the click landed: close box → `CLOSEW`, title bar → set `GRAB`,
-anywhere else → just raise. `GRAB` holds the index of the window being
-carried, or −1. `PSTEP` moves the pointer and, if something is grabbed, shifts
-that window by the same delta and repaints.
+`HXOR` makes every drawing word XOR what it draws rather than replace it, so
+drawing a shape twice leaves the screen as it was found. That touches two
+paths in the driver, because they write differently: `MergeByte` skips its
+read so the masked bits flip rather than take the pattern, and `HgrHLine`'s
+solid middle bytes — which bypass `MergeByte` entirely for speed — EOR
+instead of store.
 
 ## Text on the graphics screen
 
@@ -222,15 +222,11 @@ window titles, and the selected file row are highlighted.
 
 ## The disk
 
-DOS 3.3 is still resident at `$9600`, so rather than driving the Disk II by
-hand the kernel borrows its **RWTS**: `$03E3` hands back DOS's own IOB, already
-filled in with slot, drive and device table, and `$03D9` performs whatever the
-IOB describes. `RSECT` and `WSECT` expose that to Forth as raw 256-byte
-sector reads and writes.
-
-RWTS works entirely below `$0050` in zero page — exactly the region this Forth
-was built to keep its hands off from the very first commit. That decision is
-what makes calling it safe now, with no shadowing or save/restore.
+**There is no DOS**, on the disk or in memory. `src/d2core.inc` drives the
+Disk II directly — phase stepping, 4-and-4 address fields, 6-and-2 data — and
+`DREAD` and `DWRITE` expose it to Forth as raw 256-byte sector reads and
+writes. A DOS 3.3 *filesystem* is still what is on the floppy, so the image
+stays readable by anything else; what went away is DOS the program.
 
 Everything above sector level is Forth. `CATLOAD` walks the catalog: the VTOC
 at track 17 sector 0 names the first catalog sector, each catalog sector names
@@ -242,115 +238,111 @@ origin is what lets `FLOCK` write a change back.
 
 `FREE` counts free sectors out of the VTOC's four-byte-per-track bitmap.
 
-## The explorer
+`FLOCK` is now `LOCK`, and the rest are `DEL` and `REN`; each takes the number
+`CAT` printed, and refuses an index outside the catalog rather than trusting
+it, because every one of them writes to the disk.
 
-Window 0 is the file browser. Its text grid is derived from the window
-rectangle rather than hardcoded, so it stays correct if the window moves; the
-window's top edge is a multiple of 8 so its title bar lands exactly on a text
-row.
-
-Clicking it selects a file rather than raising or dragging, which is also why
-it never leaves the back of the z-order — everything else can be raised over
-it.
+## The file commands
 
 The three operations that change the disk all work the same way: read the
-catalog sector the entry came from, edit it, write it back, reload.
+catalog sector the entry came from, edit it, write it back, reload. Keeping
+each parsed entry's **origin** — catalog track, sector and byte offset — is
+what makes that possible.
 
 - **Lock** flips bit 7 of the type byte.
 - **Rename** rewrites the 30-byte name field, high-bit set and space padded,
   from a line read with `ASKLN`. That word copies the typed text straight out
   of `TIB` into its own buffer, because `TIB` is also the outer interpreter's
   input buffer.
-- **Delete** is the involved one, and it is the reason catalog records keep
-  their origin. It walks the file's track/sector list freeing every data
-  sector in the VTOC bitmap, then the list sectors themselves, then marks the
-  entry the way DOS does — the first track byte moves to the last byte of the
-  name and `$FF` takes its place — and writes both the catalog sector and the
-  VTOC back. A locked file is refused, which is what the lock is for.
+- **Delete** is the involved one. It walks the file's track/sector list
+  freeing every data sector in the VTOC bitmap, then the list sectors
+  themselves, then marks the entry the way DOS does — the first track byte
+  moves to the last byte of the name and `$FF` takes its place — and writes
+  both the catalog sector and the VTOC back. A locked file is refused, which
+  is what the lock is for.
 
 A track byte of zero means an unused slot in a track/sector list, which is
-unambiguous because track 0 is DOS and never allocated to a file.
+unambiguous because track 0 holds the boot loader and is never allocated to a
+file.
 
 ## Memory map
 
 | range | what |
 |---|---|
+| `$0400-$07FF` | the text screen, in **both** banks — even columns in aux, odd in main |
 | `$0800-$0FFF` | one raw disk sector |
 | `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
-| `$4000-$6E9x` | the kernel |
-| `$6E9x-$92FF` | dictionary, growing upward |
-| `$9300-$95FF` | DOS 3.3 file buffer (one, see below) |
-| `$9600-$BFFF` | DOS 3.3 |
+| `$4000-$7CD8` | the kernel |
+| `$7CD9-$BEFF` | dictionary, growing upward |
 
-The disk's greeting issues `MAXFILES 1` before `BRUN`, which drops DOS from
-three file buffers to one and hands about 2K back to the dictionary.
+Zero page: `$00-$4F` is left alone — the monitor's text window state and the
+80-column firmware's own variables live there, and the console calls both on
+every line typed. `$50-$DF` was Applesoft's, and Forth replaces Applesoft, so
+it is all ours. The data stack occupies `$50-$9F` and **`$A0-$AF` is a
+deliberate gap** — the deepest primitive reaches `7,X`, so an empty-stack
+fetch lands in the gap rather than on `IP`. Without it, `@` on an empty stack
+stores its result *into* `IP` and the inner interpreter jumps somewhere
+random: a mistyped line has to produce an error, not a crash.
 
-Hi-res page 2 used to sit at `$4000` as a would-be back buffer; the OS needs
-the room more than it needs double buffering.
+## Boot cost
 
-Zero page: `$00-$4F` is left alone (the monitor's text window state and DOS's
-RWTS live there, and we call both). `$50-$DF` was Applesoft's, and Forth
-replaces Applesoft, so it is all ours. The data stack occupies `$50-$9F` and
-**`$A0-$AF` is a deliberate gap** — the deepest primitive reaches `7,X`, so an
-empty-stack fetch lands in the gap rather than on `IP`. Without it, `@` on an
-empty stack stores its result *into* `IP` and the inner interpreter jumps
-somewhere random: a mistyped line has to produce an error, not a crash.
+About 18 emulated seconds, nearly all of it compiling `system.fth`. The
+history is worth recording, because two of the three attempts at this were
+aimed at the wrong thing:
 
-## Boot cost, measured
-
-Boot is about 30 emulated seconds. The breakdown, measured rather than
-assumed — and the assumptions were wrong twice:
-
-| stage | |
-|---|---|
-| ~24s | **DOS 3.3 booting.** A disk whose greeting `BRUN`s a *2-sector* binary takes just as long as one loading the 15K kernel, on both `apple2ee` and `apple2p`. This dominates everything. |
-| ~4s | loading the kernel |
-| ~11s | compiling `system.fth` |
-
-Two attempts at this are worth recording because both were aimed at the wrong
-thing:
-
-- **Indexing the dictionary** (below) cut compiling from ~28s to ~11s. Real,
-  but it only ever addressed the smallest slice.
-- **`boot/loader.s`** bypasses DOS's file manager, reading the catalog, the
-  track/sector list and the data sectors itself through RWTS. It works and it
-  is a prerequisite for ever dropping DOS — but it produced no measurable
+- **Indexing the dictionary** cut compiling from ~28s to ~11s. `FindWord` was
+  a linear scan of a linked list that reached ~210 entries, and the kernel
+  primitives are defined first, so every lookup of `+` or `@` walked the whole
+  chain. It is now hashed into 16 buckets on the first character and length.
+- **Bypassing DOS's file manager** to load the kernel produced no measurable
   gain, because loading was never the cost.
+- **Dropping DOS entirely** — a boot sector that pulls the kernel off track 0
+  with the system's own Disk II driver — took ~24s off the front, because a
+  DOS boot cost the same whether it then ran a 2-sector binary or a 15K one.
+  It also handed back the 10K DOS occupied at `$9600-$BFFF`.
 
-**The real fix is not to boot DOS at all**: a custom boot sector that pulls
-the kernel straight off track 0. That would also hand back the 10K DOS
-occupies at `$9600-$BFFF`. The cost is losing RWTS, so the disk code would
-need its own sector reader.
+Removing the windowing environment took the image from 23233 bytes to 15577
+and the boot from ~28 emulated seconds to ~18.
 
-Until then, `make gui SPEED=8` boots in about four seconds.
+`make gui SPEED=8` boots in about two seconds.
 
-## Bootstrap cost
+## Testing
 
-Boot is about 32 emulated seconds, and roughly two thirds of that is
-compiling `system.fth`. `FindWord` is a linear scan of a linked list that
-reaches ~210 entries — around 10 ms per token — and the source is well over
-two thousand tokens. Nothing is wrong; it is just an unindexed dictionary.
+`make test` types Forth at the console and checks **machine state**, not the
+screen: a screenshot tells you something changed, the data stack tells you
+what the system believes. `X` is the stack pointer and the top level parks it
+in `XSAV` before waiting for a line, so while the prompt is up the whole stack
+can be read out of zero page.
 
-The kernel primitives are defined first, so they sit at the *tail* of the
-chain and every lookup of `+` or `@` walks the entire list. If boot time
-starts to matter, that is the thing to attack: a hash or a per-length bucket
-chain would cut it by an order of magnitude.
+```bash
+make test                # everything -- a separate boot per test, a few minutes
+make test T="arith xor"  # named tests
+python3 tools/contest.py --list
+```
 
-A repaint (desktop fill plus three windows) is roughly half a second, so
-dragging is chunky. Hi-res page 2 at `$4000` is untouched and is the obvious
-place to double-buffer.
+Three things about the harness were worth more than they cost:
+
+- **`natkeyboard:post` types over many frames.** Guessing how long put every
+  assertion a line behind; `natkeyboard.is_posting` says when it is done.
+- **Readiness waits for a variable, not a frame count.** `NFREE` is filled by
+  the greeting, so a non-zero `NFREE` means the console is up — and growing
+  the image no longer moves the finish line.
+- **An ioport field does not stay written.** Anything driving the game port
+  has to reassert it every frame, or an input lands or is missed depending on
+  which frame it fell on.
 
 ## Debugging
 
 Reading characters off a screenshot is guesswork. `tools/dumptext.lua` prints
-the actual text screen bytes, zero page, and the dictionary state (`DP`,
-`LATEST`, `STATE`, whether the link chain terminates, and the newest
-definitions — the first name is whatever was being compiled if `STATE` is
-non-zero):
+zero page and the dictionary state (`DP`, `LATEST`, `STATE`, whether the link
+chain terminates, and the newest definitions — the first name is whatever was
+being compiled if `STATE` is non-zero). Its screen dump now shows only the
+**odd** columns, since it reads main memory and the console keeps the even
+ones in aux:
 
 ```bash
-mame apple2p -rompath ./roms -sl4 "" -gameio joy -flop1 build/forth.dsk \
+mame apple2ee -rompath ./roms -sl4 "" -flop1 build/forth.dsk \
   -skip_gameinfo -window -nothrottle -seconds_to_run 40 \
   -autoboot_delay 0 -autoboot_script tools/dumptext.lua
 ```
@@ -358,23 +350,21 @@ mame apple2p -rompath ./roms -sl4 "" -gameio joy -flop1 build/forth.dsk \
 `-autoboot_command` types at a fixed rate, and the Apple II keyboard has no
 buffer — a new keypress simply overwrites the last — so anything typed while
 Forth is busy interpreting is **silently lost**, which looks exactly like a
-logic bug. `tools/drive.lua` posts one line, waits, then posts the next:
+logic bug. That is what `tools/contest.lua` exists to get right; for one-off
+poking, `tools/drive.lua` posts one line, waits, then posts the next:
 
 ```bash
-DRIVE='140 92 PTRAT CLICK GRAB @ .;;-30 0 PSTEP;;2 .X1 @ .' START=1700 GAP=420 \
-mame apple2p -rompath ./roms -sl4 "" -gameio joy -flop1 build/forth.dsk \
+DRIVE='2 3 + .;;HGR;;3 HCOLOR 0 559 96 HLINE;;TEXT' START=1200 GAP=240 \
+mame apple2ee -rompath ./roms -sl4 "" -flop1 build/forth.dsk \
   -skip_gameinfo -window -nothrottle -seconds_to_run 60 \
   -autoboot_delay 0 -autoboot_script tools/drive.lua
 ```
 
-It waits for the system to actually be ready rather than guessing: the
-kernel's bootstrap source pointer (`SRC+1` at `$CF`) is non-zero while the
-built-in source is being interpreted and drops to zero when the interpreter
-turns to the keyboard — exactly when the prompt appears. `GAP` is the frames
-between lines; widen it for lines that repaint or touch the disk. Single
-characters work too, so the event loop can be driven key by key:
-`DRIVE='DESK;;K;; ;;J;;J;;Q'`. `PEEK='0x2285,0x2685'` dumps memory at the end,
-which is how the font blitter was verified byte for byte.
+It waits for the system to be ready rather than guessing: the kernel's
+bootstrap source pointer (`SRC+1`) is non-zero while the built-in source is
+being interpreted and drops to zero when the interpreter turns to the
+keyboard — exactly when the prompt appears. `GAP` is the frames between
+lines; widen it for lines that touch the disk.
 
 Two flag-clobber bugs cost most of the debugging time on this system, both
 the same shape — a flag set, then an unrelated instruction between it and the
@@ -402,9 +392,11 @@ roms/…341-0036.chr ─mkfont.py─┤
 src/*.s src/*.inc ────────────┘
 ```
 
-The disk carries the OS binary, an Applesoft greeting that sets `MAXFILES 1`
-and `BRUN`s it, `SYSTEM.FTH` (the OS's own source), and a `README` — so the
-explorer has a real catalog to browse.
+The disk carries **its own boot sector** on track 0, the kernel on the tracks
+after it, and a DOS 3.3 filesystem holding `SYSTEM.FTH` (the OS's own source)
+and a few text files — so `CAT` has a real catalog to list. There is no DOS
+and no Applesoft greeting: the boot PROM loads `boot/boot1.s`, which reads the
+kernel with the same Disk II driver the system uses afterwards.
 
 | knob | default | meaning |
 |---|---|---|
@@ -413,7 +405,7 @@ explorer has a real catalog to browse.
 | `MONITOR` | `4` | MAME monitor type — 4 is B&W, 0 is colour |
 | `SRCDIR` | `src` | which directory to assemble |
 | `ORG` | `0x4000` | load address |
-| `SECS` | `32` | emulated seconds before auto-exit (boot needs ~32) |
+| `SECS` | `32` | emulated seconds before auto-exit (boot needs ~18) |
 
 ```bash
 make run                                          # the Forth system
@@ -430,18 +422,14 @@ work.
 
 - **Entry point goes in `.segment "STARTUP"`**, which links first so it lands
   exactly at `ORG` regardless of how many source files there are.
-- **Exit with `jmp $03D0`, not `rts`** — `BRUN` loads the binary over the
-  Applesoft greeting, so there is no BASIC program to return into. The
-  Makefile defines `DOS` (`ca65 -D DOS=1`) so sources can tell which path they
-  were built for.
 - **High ASCII.** The text screen wants the high bit set: `'H'` is `$C8`.
 
 ### Disk
 
-`make disk` produces a bootable DOS 3.3 image holding a one-line Applesoft
-greeting that `BRUN`s the binary. It is a standard DOS-order `.dsk`, so it
-also runs in other emulators or on real hardware via ADTPro. Inspect it with
-`a2kit catalog -d build/forth.dsk`.
+`make disk` produces a bootable image: own boot sector, kernel, and a DOS 3.3
+filesystem for the files. It is a standard DOS-order `.dsk`, so it also runs
+in other emulators or on real hardware via ADTPro. Inspect the filesystem
+side with `a2kit catalog -d build/forth.dsk`.
 
 ## Emulator
 

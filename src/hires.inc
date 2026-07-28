@@ -98,12 +98,17 @@ HgrOn:
         bit     MAINSEL
         rts
 
-; Back to the plain 40-column text screen, for the REPL.
+; Out of graphics and back to the console, which is 80 columns.  80COL and
+; 80STORE stay set: the first is what makes the video hardware fetch the aux
+; half of each text row, the second is what lets the firmware write it.
+; Clearing them left the screen showing main memory alone -- every other
+; character of the line, which is what an 80-column screen displayed 40
+; columns wide looks like.
 HgrText:
         bit     TXTSET
         bit     CLRDHIRES
-        sta     CLR80COL
-        sta     CLR80STORE
+        sta     SET80COL
+        sta     SET80STORE
         bit     MAINSEL
         lda     #0
         sta     WNDTOP
@@ -121,17 +126,8 @@ HgrColor:
         rts
 
 ; Clear both banks to the byte in A.
-;
-; PVIS is cleared too.  The pointer is drawn by XOR, so PVIS records whether
-; an arrow is currently on the screen -- and wiping the screen takes it away
-; without going through PtrHide.  Leaving PVIS set means the next PtrHide
-; XORs the arrow *on* instead of off, and the one after that draws a second
-; one: exactly the spare arrow that has no business being there.
 HgrClear:
         sta     HTMP2
-        lda     #0
-        sta     PVIS
-        lda     HTMP2
         bit     AUXSEL
         jsr     ClearBank
         bit     MAINSEL

@@ -1,9 +1,10 @@
 ; ---------------------------------------------------------------------------
 ; zp.inc -- zero page allocation
 ;
-; $00-$4F is left alone: the monitor keeps its text-window state there
-; ($20-$2F, and CH/CV at $24/$25) and DOS 3.3's RWTS uses $40-$4B.  We call
-; both, so those stay untouched.
+; $00-$4F is left alone.  The monitor keeps its text-window state there
+; ($20-$2F, and CH/CV at $24/$25), and the //e's 80-column firmware -- which
+; is the console -- keeps its own below $50 as well.  Both are called on every
+; line typed, so that region stays untouched.
 ;
 ; $50-$CF was Applesoft's.  Forth replaces Applesoft, so it is all ours.
 ; ---------------------------------------------------------------------------
@@ -70,7 +71,3 @@ TINVF       = $DA               ; 1  $7F for inverse video, else $00
 
 ; --- disk ------------------------------------------------------------------
 ; RWTS itself works below $0050, so none of this collides with it.
-IOBP        = $DB               ; 2  pointer to DOS's IOB
-RTRK        = $DD               ; 1
-RSEC        = $DE               ; 1
-RCMD        = $DF               ; 1  1 = read, 2 = write
