@@ -99,6 +99,8 @@ PROW:    .byte  0
 PSH:     .word  0                       ; one shape row, shifted into place
 PTMP:    .word  0
 PXTMP:   .word  0                       ; pointer byte being merged
+PLASTX:  .byte  128                     ; last analog reading, so MREAD can
+PLASTY:  .byte  128                     ; tell a real movement from an idle one
 
 RBUF:    .word  0                       ; sector buffer address for RWTS
 

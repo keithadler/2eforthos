@@ -255,7 +255,7 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
   GRAB @ 0< IF 2DROP EXIT THEN WSHIFT REPAINT ;
 
 \ --- the event loop --------------------------------------------------------
-10 CONSTANT STEP  VARIABLE RUNF
+10 CONSTANT STEP  VARIABLE RUNF VARIABLE BTNW
 : EVENT KEYC
   DUP 73 = IF 0 STEP NEGATE PSTEP THEN
   DUP 75 = IF 0 STEP PSTEP THEN
@@ -269,8 +269,14 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
   DUP 85 = IF -1 ESCROLL REPAINT THEN
   DUP 68 = IF 1 ESCROLL REPAINT THEN
   81 = IF 0 RUNF ! THEN ;
-: DESK -1 RUNF ! REPAINT
-  BEGIN RUNF @ WHILE KEY? IF EVENT THEN REPEAT
+\ Poll the game port every time round: MREAD ignores an unmoved stick, so the
+\ keyboard still works when nothing is plugged in.  The button fires CLICK on
+\ its press edge only, not for as long as it is held.
+: MOUSE MREAD
+  BTN BTNW @ 0= AND IF CLICK THEN
+  BTN BTNW ! ;
+: DESK -1 RUNF ! 0 BTNW ! REPAINT
+  BEGIN RUNF @ WHILE MOUSE KEY? IF EVENT THEN REPEAT
   PTRHIDE TEXT ;
 
 \ --- boot ------------------------------------------------------------------
