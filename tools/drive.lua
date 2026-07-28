@@ -18,6 +18,10 @@
 local GAP    = tonumber(os.getenv("GAP")    or "220")
 local SETTLE = tonumber(os.getenv("SETTLE") or "120")
 local READY  = tonumber(os.getenv("READY")  or "0xCF")
+-- The system boots straight into the desktop event loop, which never returns
+-- to the interpreter, so the ready flag may never clear.  Start anyway after
+-- this many frames.
+local READYMAX = tonumber(os.getenv("READYMAX") or "2600")
 
 local lines = {}
 for chunk in ((os.getenv("DRIVE") or "") .. ";;"):gmatch("(.-);;") do
@@ -75,6 +79,10 @@ FRAME_SUB = emu.add_machine_frame_notifier(function()
         elseif byte == 0 then
             start = frames + SETTLE             -- and has reached the prompt
             print(string.format("[drive] system ready at frame %d", frames))
+        elseif frames >= READYMAX then
+            start = frames + SETTLE
+            print(string.format("[drive] ready flag never cleared; "
+                                .. "starting anyway at frame %d", frames))
         end
         return
     end

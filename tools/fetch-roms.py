@@ -19,6 +19,7 @@ import argparse
 import itertools
 import pathlib
 import re
+import subprocess
 import sys
 import urllib.request
 import zlib
@@ -38,6 +39,12 @@ SYSTEM_ROMS = [
 CHARGEN_CRC   = 0x64F415C6      # 341-0036.chr
 DISKII_CRC    = 0xCE7144F6      # 341-0027-a.p5, the boot PROM
 SEQUENCER_CRC = 0xB72A2C70      # 341-0028-a.rom, the P6 state machine
+
+# Enhanced //e.  AppleWin carries the main ROMs and the mousetext character
+# generator at exactly the CRCs MAME wants; the keyboard decoder is generated
+# by tools/mkkbdrom.py because no open project ships that dump.
+IIE_ROMS = [("342-0304-a.e10", 0x443AA7C4), ("342-0303-a.e8", 0x95E10034)]
+IIE_CHARGEN_CRC = 0x2651014D    # 342-0265-a.chr
 
 
 def crc(data: bytes) -> int:
@@ -111,16 +118,33 @@ def main() -> int:
     good &= write(dest / "a2diskiing" / "341-0027-a.p5",
                   fetch(APPLEWIN + "DISK2.rom"), DISKII_CRC)
 
+    print("Enhanced //e system ROMs (AppleWin):")
+    iie = fetch(APPLEWIN + "Apple2e_Enhanced.rom")
+    if len(iie) != 16384:
+        raise SystemExit(f"Apple2e_Enhanced.rom should be 16384 bytes, got {len(iie)}")
+    for index, (name, want) in enumerate(IIE_ROMS):
+        good &= write(dest / "apple2ee" / name,
+                      iie[index * 8192:(index + 1) * 8192], want)
+    good &= write(dest / "apple2ee" / "342-0265-a.chr",
+                  fetch(APPLEWIN + "Apple2e_Enhanced_Video.rom"), IIE_CHARGEN_CRC)
+
     print("Disk II sequencer (apple2js):")
     good &= write(dest / "d2fdc" / "341-0028-a.rom",
                   sequencer_rom(fetch(APPLE2JS).decode("utf-8", "replace")),
                   SEQUENCER_CRC)
 
+    print("//e keyboard decoder (generated):")
+    here = pathlib.Path(__file__).resolve().parent
+    subprocess.run([sys.executable, str(here / "mkkbdrom.py"),
+                    str(dest / "apple2ee" / "341-0132-d.e12")], check=True)
+
     if not good:
         print("\nAt least one ROM did not match. Refusing to call this a good set.")
         return 1
-    print(f"\nAll ROMs match MAME's CRCs. Check with:\n"
-          f"  mame -rompath {dest} -verifyroms apple2p")
+    print(f"\nAll downloaded ROMs match MAME's CRCs. Check with:\n"
+          f"  mame -rompath {dest} -verifyroms apple2p\n"
+          f"  mame -rompath {dest} -verifyroms apple2ee   "
+          f"(warns on the generated keyboard ROM)")
     return 0
 
 

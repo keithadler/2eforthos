@@ -167,12 +167,20 @@ Refill:
         ldx     XSAV
         lda     #0
         sta     TOIN
-        ldy     TIBLEN                  ; the keyboard gives us high ASCII
+        ; Strip the high bit, and fold to upper case: a //e keyboard sends
+        ; lower case, but every name in the dictionary is upper case.
+        ldy     TIBLEN
         beq     @nostrip
 @strip: dey
         lda     TIB,y
         and     #$7F
-        sta     TIB,y
+        cmp     #'a'
+        bcc     @put
+        cmp     #'z'+1
+        bcs     @put
+        sec
+        sbc     #$20
+@put:   sta     TIB,y
         tya
         bne     @strip
 @nostrip:

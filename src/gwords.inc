@@ -3,16 +3,13 @@
 ;
 ; Every routine in hires.inc leaves X alone, so these are just argument
 ; shuffles from the data stack into the driver's zero-page parameters.
+; Coordinates are 0..559 by 0..191.
 ; ---------------------------------------------------------------------------
 
-        prim    "HGR", W_HGR, 0         ; graphics + 4 text lines, cleared
-        jsr     HgrMixed
+        prim    "HGR", W_HGR, 0         ; full-screen double hi-res, cleared
+        jsr     HgrOn
         lda     #$00
         jsr     HgrClear
-        NEXT
-
-        prim    "HGRFULL", W_HGRFULL, 0 ; all 192 rows, no text window
-        jsr     HgrFull
         NEXT
 
         prim    "TEXT", W_TEXTMODE, 0

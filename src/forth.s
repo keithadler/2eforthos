@@ -1,11 +1,13 @@
 ; ---------------------------------------------------------------------------
-; forth.s -- a Forth system for the Apple ][+, with a hi-res screen driver.
+; forth.s -- a Forth system for the Apple //e, with a 560x192 monochrome
+; double hi-res screen driver.
 ;
 ; Memory map once BRUN from DOS 3.3:
 ;
 ;   $0800-$0FFF   one raw disk sector
 ;   $1000-$1FFF   the parsed catalog, 32 bytes per file
-;   $2000-$3FFF   hi-res page 1, the visible screen
+;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main are
+';                 interleaved byte by byte to make 560 pixels per row
 ;   $4000-....    this kernel, then the dictionary growing upward.  Page 2
 ;                 of hi-res used to live at $4000; the OS needs the room
 ;                 more than it needs a back buffer.
@@ -53,9 +55,9 @@ ColdStart:
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
 
-BANNER: .byte   "A2FORTH OS  V0.4", $0D
+BANNER: .byte   "A2FORTH OS  V0.5", $0D
         .byte   "6502 DIRECT-THREADED FORTH", $0D
-        .byte   "48K APPLE ][+    SLOT 6 DRIVE 1", $0D
+        .byte   "APPLE //E  128K  SLOT 6 DRIVE 1", $0D
         .byte   $0D
         .byte   "INITIALIZING...", $0D, $00
 
@@ -90,6 +92,7 @@ PSHIFT:  .byte  0                       ; and how far into that byte
 PROW:    .byte  0
 PSH:     .word  0                       ; one shape row, shifted into place
 PTMP:    .word  0
+PXTMP:   .word  0                       ; pointer byte being merged
 
 RBUF:    .word  0                       ; sector buffer address for RWTS
 

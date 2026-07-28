@@ -46,6 +46,8 @@ HB1         = $CA               ; 1  first byte-column of a span
 HB2         = $CB               ; 1  last byte-column of a span
 HLM         = $CC               ; 1  left edge mask
 HRM         = $CD               ; 1  right edge mask
+HCOLN       = $E0               ; 1  byte column being written, 0..79
+HBYTE       = $E1               ; 1  its index within the row, HCOLN >> 1
 
 ; --- outer interpreter -----------------------------------------------------
 SRC         = $CE               ; 2  general source pointer

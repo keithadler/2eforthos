@@ -9,7 +9,9 @@
 ;
 ; A screen byte holds 7 pixels in bits 0-6, bit 0 leftmost.  An 8-pixel-wide
 ; shape shifted by 0..6 occupies at most 14 bits, so it always lands in
-; exactly two screen bytes -- no third-byte case to handle.
+; exactly two screen bytes -- no third-byte case to handle.  Those two bytes
+; are adjacent columns and therefore always in *different* banks, so each is
+; written through SelectBank.
 ;
 ; Input: the Apple ][+ has no mouse.  Its pointing device is the analog game
 ; port, read through the monitor's PREAD, and that is what MREAD uses.  The
@@ -68,28 +70,39 @@ PtrXor:
         dey
         bne     @shift
 @placed:
-        ldy     PCOL
-        lda     PSH                     ; low 7 bits -> first screen byte
+        lda     PSH                     ; low 7 bits -> first byte column
         and     #$7F
         beq     @second
+        sta     PXTMP
+        lda     PCOL
+        jsr     SelectBank
+        ldy     HBYTE
+        lda     PXTMP
         eor     (HBASE),y
         sta     (HBASE),y
 @second:
-        iny
-        cpy     #40
-        bcs     @next                   ; ran off the right edge
-        lda     PSH                     ; bits 7..13 -> second screen byte
+        lda     PSH                     ; bits 7..13 -> the next column
         asl     a                       ; bit 7 of the low byte into carry
         lda     PSH+1
         rol     a
         and     #$7F
         beq     @next
+        sta     PXTMP
+        lda     PCOL
+        clc
+        adc     #1
+        cmp     #80
+        bcs     @next                   ; ran off the right edge
+        jsr     SelectBank
+        ldy     HBYTE
+        lda     PXTMP
         eor     (HBASE),y
         sta     (HBASE),y
 @next:  inc     PROW
         lda     PROW
         cmp     #PTRROWS
         bne     @row
+        bit     MAINSEL                 ; never leave aux selected
         rts
 
 PtrShow:
@@ -108,29 +121,30 @@ PtrHide:
         sta     PVIS
 @done:  rts
 
-; Keep the arrow inside the graphics area: x 0..271 leaves room for its width,
-; y 0..151 keeps it clear of the four text lines that start at row 160.
+; Keep the arrow on screen: x 0..551 leaves room for its width, y 0..183 for
+; its height.  Double hi-res here is full screen, so all 192 rows are ours.
 PtrClamp:
         lda     PX+1
         bmi     @zerox
         beq     @xok
-        cmp     #1
+        cmp     #2
+        bcc     @xok                    ; high byte 0 or 1 is always in range
         bne     @maxx
         lda     PX
-        cmp     #<272                   ; 271 = $010F
+        cmp     #<552                   ; 551 = $0227
         bcc     @xok
-@maxx:  lda     #<271
+@maxx:  lda     #<551
         sta     PX
-        lda     #>271
+        lda     #>551
         sta     PX+1
         jmp     @xok
 @zerox: lda     #0
         sta     PX
         sta     PX+1
 @xok:   lda     PY
-        cmp     #152
+        cmp     #184
         bcc     @yok
-        lda     #151
+        lda     #183
         sta     PY
 @yok:   rts
 
@@ -232,8 +246,8 @@ PtrClamp:
         NEXT
 
 ; MREAD -- move the pointer to wherever the joystick is pointing.  The paddle
-; range 0..255 is mapped onto the 272x152 pointer area: x scales by 17/16,
-; y by 19/32.
+; range 0..255 is mapped onto the 552x184 pointer area: x scales by 17/8,
+; y by 3/4.
         prim    "MREAD", W_MREAD, 0
         jsr     PtrHide
         stx     XSAV
@@ -244,32 +258,28 @@ PtrClamp:
         jsr     PREAD
         sty     PTMP+1                  ; paddle 1 -> y
         ldx     XSAV
-        lda     PTMP                    ; x = p0 + p0/16
+        lda     PTMP                    ; x = 2*p0 + p0/8, i.e. 17/8
         lsr     a
         lsr     a
         lsr     a
-        lsr     a
-        clc
-        adc     PTMP
+        sta     PXTMP
+        lda     PTMP
+        asl     a
         sta     PX
         lda     #0
+        rol     a
+        sta     PX+1
+        clc
+        lda     PX
+        adc     PXTMP
+        sta     PX
+        lda     PX+1
         adc     #0
         sta     PX+1
-        lda     PTMP+1                  ; y = p1/2 + p1/16 + p1/32, i.e. 19/32,
-        lsr     a                       ; which takes 0..255 to 0..149
+        lda     PTMP+1                  ; y = p1/2 + p1/4, i.e. 3/4,
+        lsr     a                       ; which takes 0..255 to 0..191
         sta     PY
         lda     PTMP+1
-        lsr     a
-        lsr     a
-        lsr     a
-        lsr     a
-        clc
-        adc     PY
-        sta     PY
-        lda     PTMP+1
-        lsr     a
-        lsr     a
-        lsr     a
         lsr     a
         lsr     a
         clc

@@ -23,7 +23,7 @@
 
         .segment "STARTUP"
 start:
-        jsr     HgrFull
+        jsr     HgrOn
         lda     #$00
         jsr     HgrClear
 
@@ -31,7 +31,7 @@ start:
         lda     #3
         jsr     HgrColor
         setx    0
-        setx2   279
+        setx2   559
         lda     #0
         sta     HY
         jsr     HgrHLine
@@ -45,7 +45,7 @@ start:
         lda     #191
         sta     HY2
         jsr     HgrVLine
-        setx    279
+        setx    559
         lda     #0
         sta     HY
         lda     #191
@@ -57,8 +57,8 @@ start:
         jsr     HgrColor
         lda     #20
         sta     HY
-@green: setx    20
-        setx2   120
+@green: setx    40
+        setx2   240
         jsr     HgrHLine
         inc     HY
         lda     HY
@@ -70,8 +70,8 @@ start:
         jsr     HgrColor
         lda     #100
         sta     HY
-@viol:  setx    150
-        setx2   260
+@viol:  setx    300
+        setx2   520
         jsr     HgrHLine
         inc     HY
         lda     HY
