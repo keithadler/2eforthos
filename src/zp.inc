@@ -49,6 +49,9 @@ HRM         = $CD               ; 1  right edge mask
 HCOLN       = $E0               ; 1  byte column being written, 0..79
 HBYTE       = $E1               ; 1  its index within the row, HCOLN >> 1
 
+; --- Disk II, driven directly ----------------------------------------------
+D2PTR       = $E2               ; 2  where a decoded sector goes
+
 ; --- outer interpreter -----------------------------------------------------
 SRC         = $CE               ; 2  general source pointer
 UTMP        = $D0               ; 2
