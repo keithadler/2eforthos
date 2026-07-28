@@ -37,6 +37,19 @@ ColdStart:
         lda     #>BANNER
         sta     TMP2+1
         jsr     PutStr
+        ; DOS hooks the monitor's character vectors, so every COUT call runs
+        ; through its code at $9600.  Point them back at the ROM: from here
+        ; the dictionary can grow over DOS's command interpreter and file
+        ; manager, which we never call.  RWTS lives above $B600 and survives,
+        ; which matters until our own writer replaces it.
+        lda     #<COUT1
+        sta     CSW
+        lda     #>COUT1
+        sta     CSW+1
+        lda     #<KEYIN
+        sta     KSW
+        lda     #>KEYIN
+        sta     KSW+1
         jsr     BuildIndex              ; hash the built-in dictionary
         jsr     D2BuildTable            ; invert the 6-and-2 nibble table
         lda     #<BOOTSRC               ; the interpreter reads this first,
