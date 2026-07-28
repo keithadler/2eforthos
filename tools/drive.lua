@@ -1,6 +1,10 @@
 -- Type lines into the running Forth at a pace it can keep up with, then dump
 -- the machine state.
 --
+-- Note: MAME numbers snapshots 0000, 0001, ... and never overwrites, so a
+-- stale 0000.png survives every later run.  Clear the directory before a
+-- session or you will read an old frame and believe nothing happened.
+--
 -- MAME's -autoboot_command types at a fixed rate.  The Apple II keyboard has
 -- no buffer -- a new keypress simply overwrites the last -- so anything typed
 -- while Forth is busy interpreting is lost.  This posts one line, waits, then
