@@ -62,83 +62,21 @@ MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
 
 .PHONY: all roms disk run gui poke monitor clean
 
-# Select the B&W monitor by writing MAME's per-machine config directly.
+# MAME's per-machine config: the B&W monitor, and the mouse button bound to
+# the game port's button 1.  MAME maps the mouse to the analog axes by
+# default but not to the button, so clicks never reached the OS -- the
+# pointer moved and nothing responded to pressing.
 monitor:
 	@mkdir -p cfg
-	@printf '<?xml version="1.0"?>\n<mameconfig version="10">\n <system name="%s">\n  <input>\n   <port tag=":a2video:a2_video_config" type="CONFIG" mask="7" defvalue="0" value="%s" />\n  </input>\n </system>\n</mameconfig>\n' \
-	  '$(MACHINE)' '$(MONITOR)' > cfg/$(MACHINE).cfg
-
-all: $(BIN)
-
-# Apple's ROMs are not in this repository; rebuild them from AppleWin and
-# apple2js, verifying every CRC against what MAME expects.
-roms:
-	python3 tools/fetch-roms.py --dest $(ROMS)
-
-build:
-	@mkdir -p build
-
-build/font.inc: roms/apple2p/341-0036.chr tools/mkfont.py | build
-	@python3 tools/mkfont.py $< $@ | head -1
-
-build/bootsrc.inc: src/system.fth tools/mkboot.py | build
-	@python3 tools/mkboot.py $< $@
-
-build/icons.inc: src/icons.txt tools/mkicons.py | build
-	@python3 tools/mkicons.py $< $@
-
-roms/apple2p/341-0036.chr:
-	@echo "Apple ROMs are not present.  Run: make roms" >&2; exit 1
-
-build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
-	ca65 -g -I src -I build -D DOS=1 -l build/$*.lst $< -o $@
-
-# The boot loader replaces DOS entirely.  It has to know how big the kernel
-# is, so that comes from the linked binary.
-build/kernsecs.inc: $(BIN) | build
-	@printf 'KERNSECS = %s\nKERNILEAVE = %s\n' \
-	  $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) '$(ILEAVE)' > $@
-	@echo "kernel is $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) sectors, interleave $(ILEAVE)"
-
-$(BOOT1): boot/boot1.s build/kernsecs.inc src/d2core.inc src/apple2.cfg | build
-	ca65 -g -I src -I build boot/boot1.s -o build/boot1.o
-	ld65 -C src/apple2.cfg -S 0x0800 -o $@ build/boot1.o
-	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
-
-$(BIN): $(OBJS) src/apple2.cfg
-	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
-	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
-
-disk: $(DSK)
-
-$(DSK): $(BIN) $(BOOT1)
-	@rm -f $@
-	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
-	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
-	@for f in $(DISKFILES); do \
-	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
-	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE)
-	@$(A2KIT) catalog -d $@
-
-# -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)
-# emulated seconds cost about a second of wall clock.  Timing stays exact --
-# the emulation is deterministic, only the real-time pacing is dropped.
-# The OS writes to its own disk (delete, rename, lock), and MAME writes those
-# changes back to the image.  Automated runs boot a scratch copy so they stay
-# reproducible; `make gui` uses the real image so interactive changes stick.
-run: $(DSK) monitor
-	@rm -rf $(SHOTS)/$(MACHINE)
-	@cp $(DSK) build/run.dsk
-	mame $(MAME_COMMON) -flop1 build/run.dsk -nothrottle -seconds_to_run $(SECS)
-	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
-
-gui: $(DSK) monitor
-	BOOTSPEED=$(SPEED) BOOTFRAMES=$(BOOTFRAMES) \
-	  mame $(MAME_COMMON) -flop1 $(DSK) \
-	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
-
-poke:
-	./run.sh $(SRCDIR)/$(PROG).s
-
-clean:
-	rm -rf build shots
+	@printf '%s\n' \
+	  '<?xml version="1.0"?>' \
+	  '<mameconfig version="10">' \
+	  ' <system name="$(MACHINE)">' \
+	  '  <input>' \
+	  '   <port tag=":a2video:a2_video_config" type="CONFIG" mask="7" defvalue="0" value="$(MONITOR)" />' \
+	  '   <port tag=":gameio:joy:joystick_buttons" type="P1_BUTTON1" mask="16" defvalue="0">' \
+	  '    <newseq type="standard">MOUSECODE_1_BUTTON1</newseq>' \
+	  '   </port>' \
+	  '  </input>' \
+	  ' </system>' \
+	  '</mameconfig>' > cfg/$(MACHINE).cfg
