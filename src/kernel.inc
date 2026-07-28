@@ -15,6 +15,10 @@ RDKEY   = $FD0C                 ; wait for a keypress, returns it in A
 GETLN   = $FD6A                 ; read a line into $0200, length back in X
 CROUT   = $FD8E                 ; carriage return
 HOME    = $FC58                 ; clear the text screen
+COUT1   = $FDF0                 ; the ROM's own character output
+KEYIN   = $FD1B                 ; and its key input
+CSW     = $36                   ; the monitor's output vector, hooked by DOS
+KSW     = $38                   ; and its input vector
 TIB     = $0200                 ; GETLN's line buffer is our terminal buffer
 PROMPT  = $33                   ; GETLN's prompt character
 

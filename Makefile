@@ -27,7 +27,7 @@ INCS    := $(wildcard src/*.inc)
 DISKFILES := $(wildcard disk/*)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
-GENERATED := build/font.inc build/bootsrc.inc
+GENERATED := build/font.inc build/bootsrc.inc build/icons.inc
 LOADER  := build/loader.bin
 # What the disk's greeting runs.  The Forth build goes through the fast
 # loader; other builds BRUN their own binary directly.
@@ -81,6 +81,9 @@ build/font.inc: roms/apple2p/341-0036.chr tools/mkfont.py | build
 build/bootsrc.inc: src/system.fth tools/mkboot.py | build
 	@python3 tools/mkboot.py $< $@
 
+build/icons.inc: src/icons.txt tools/mkicons.py | build
+	@python3 tools/mkicons.py $< $@
+
 roms/apple2p/341-0036.chr:
 	@echo "Apple ROMs are not present.  Run: make roms" >&2; exit 1
 
@@ -95,7 +98,7 @@ $(LOADER): boot/loader.s src/apple2.cfg | build
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
 
 $(BIN): $(OBJS) src/apple2.cfg
-	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -o $@ $(OBJS)
+	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
 disk: $(DSK)
