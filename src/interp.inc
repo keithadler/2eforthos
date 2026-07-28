@@ -76,23 +76,34 @@ Unhide:
         sta     UTMP
         lda     LATESTV+1
         sta     UTMP+1
-        ldy     #2
+        ldy     #4
         lda     (UTMP),y
         and     #$BF
         sta     (UTMP),y
         rts
 
-; Lay down a header for the name at TMP1/WORDLEN and link it in, hidden.
+; Lay down a header for the name at TMP1/WORDLEN and link it into both chains,
+; hidden.  A new definition is the newest of its bucket, so it goes on the
+; front -- the opposite of how BuildIndex fills them at cold start.
 CreateHeader:
+        jsr     HashName
+        asl     a                       ; two bytes per bucket
+        sta     NBKT
         lda     DPV
         sta     NEWHDR
         lda     DPV+1
         sta     NEWHDR+1
-        lda     LATESTV
+        lda     LATESTV                 ; definition-order link
         sta     TMP2
         lda     LATESTV+1
         sta     TMP2+1
-        jsr     Comma                   ; link field
+        jsr     Comma
+        ldy     NBKT                    ; bucket link
+        lda     BUCKETS,y
+        sta     TMP2
+        lda     BUCKETS+1,y
+        sta     TMP2+1
+        jsr     Comma
         lda     WORDLEN
         ora     #F_HIDDEN
         jsr     CComma
@@ -110,6 +121,11 @@ CreateHeader:
         sta     LATESTV
         lda     NEWHDR+1
         sta     LATESTV+1
+        ldy     NBKT
+        lda     NEWHDR
+        sta     BUCKETS,y
+        lda     NEWHDR+1
+        sta     BUCKETS+1,y
         rts
 
 ; Lay down a `JSR <A/Y>` code field.
@@ -224,18 +240,110 @@ ParseWord:
         rts
 
 ; ---------------------------------------------------------------------------
+; Hashing.  Sixteen buckets keyed on the first character plus the length --
+; enough spread that a two-hundred word dictionary averages a dozen entries
+; per bucket instead of two hundred.  Both hashes must agree, so they are
+; written once each and nowhere else.
+; ---------------------------------------------------------------------------
+
+; A := bucket for the name at TMP1 of length WORDLEN
+HashName:
+        ldy     #0
+        lda     (TMP1),y
+        clc
+        adc     WORDLEN
+        and     #$0F
+        rts
+
+; A := bucket for the header at UTMP
+HashHeader:
+        ldy     #4
+        lda     (UTMP),y
+        and     #F_LENMASK
+        sta     FCHR
+        ldy     #5
+        lda     (UTMP),y
+        clc
+        adc     FCHR
+        and     #$0F
+        rts
+
+; ---------------------------------------------------------------------------
+; BuildIndex -- thread every header into its bucket, newest first.
+;
+; The definition chain runs newest to oldest, and FindWord needs each bucket
+; in that same order, so this appends rather than prepends and keeps a tail
+; per bucket while it works.  A bucket's last entry keeps the zero link the
+; assembler already put there, so nothing needs terminating.
+; ---------------------------------------------------------------------------
+BuildIndex:
+        lda     #0
+        ldy     #31
+@clear: sta     BUCKETS,y
+        sta     BTAILS,y
+        dey
+        bpl     @clear
+        lda     LATESTV
+        sta     UTMP
+        lda     LATESTV+1
+        sta     UTMP+1
+@loop:  lda     UTMP
+        ora     UTMP+1
+        beq     @done
+        jsr     HashHeader
+        asl     a                       ; two bytes per bucket
+        tay
+        lda     BTAILS,y
+        ora     BTAILS+1,y
+        beq     @first
+        lda     BTAILS,y                ; append: tail's bucket link := this
+        sta     UTMP2
+        lda     BTAILS+1,y
+        sta     UTMP2+1
+        sty     YSAV
+        ldy     #2
+        lda     UTMP
+        sta     (UTMP2),y
+        iny
+        lda     UTMP+1
+        sta     (UTMP2),y
+        ldy     YSAV
+        jmp     @tail
+@first: lda     UTMP
+        sta     BUCKETS,y
+        lda     UTMP+1
+        sta     BUCKETS+1,y
+@tail:  lda     UTMP
+        sta     BTAILS,y
+        lda     UTMP+1
+        sta     BTAILS+1,y
+        ldy     #0                      ; on to the previous definition
+        lda     (UTMP),y
+        sta     FCHR
+        iny
+        lda     (UTMP),y
+        sta     UTMP+1
+        lda     FCHR
+        sta     UTMP
+        jmp     @loop
+@done:  rts
+
+; ---------------------------------------------------------------------------
 ; FindWord -- look up TMP1/WORDLEN.
 ; Returns A = 0 not found, 1 ordinary, $FF immediate; TMP2 = code field.
 ; ---------------------------------------------------------------------------
 FindWord:
-        lda     LATESTV
+        jsr     HashName
+        asl     a
+        tay
+        lda     BUCKETS,y
         sta     TMP2
-        lda     LATESTV+1
+        lda     BUCKETS+1,y
         sta     TMP2+1
 @loop:  lda     TMP2
         ora     TMP2+1
         beq     @none
-        ldy     #2
+        ldy     #4
         lda     (TMP2),y
         sta     FFLAGS
         and     #F_HIDDEN
@@ -250,7 +358,7 @@ FindWord:
         cmp     WORDLEN
         beq     @found
         clc
-        adc     #3                      ; name starts at offset 3
+        adc     #5                      ; name starts at offset 5
         tay
         lda     (TMP2),y
         sta     FCHR
@@ -260,7 +368,7 @@ FindWord:
         bne     @next
         inc     PIDX
         bne     @cmp
-@next:  ldy     #0                      ; follow the link
+@next:  ldy     #2                      ; follow the bucket link
         lda     (TMP2),y
         sta     UTMP
         iny
@@ -271,9 +379,9 @@ FindWord:
         jmp     @loop
 @none:  lda     #0
         rts
-@found: clc                             ; code field = header + 3 + length
+@found: clc                             ; code field = header + 5 + length
         lda     TMP2
-        adc     #3
+        adc     #5
         sta     UTMP
         lda     TMP2+1
         adc     #0
@@ -623,7 +731,7 @@ STKSTR: .byte   " STACK?", $0D, $00
         sta     UTMP
         lda     LATESTV+1
         sta     UTMP+1
-        ldy     #2
+        ldy     #4
         lda     (UTMP),y
         ora     #F_IMMED
         sta     (UTMP),y
@@ -637,7 +745,7 @@ STKSTR: .byte   " STACK?", $0D, $00
 @loop:  lda     UTMP
         ora     UTMP+1
         beq     @done
-        ldy     #2
+        ldy     #4
         lda     (UTMP),y
         and     #F_LENMASK
         sta     NCNT
@@ -647,7 +755,7 @@ STKSTR: .byte   " STACK?", $0D, $00
         cmp     NCNT
         beq     @space
         clc
-        adc     #3
+        adc     #5
         tay
         lda     (UTMP),y
         jsr     PutChar

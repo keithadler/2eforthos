@@ -57,9 +57,9 @@ local function dump()
     local q, names = w(LATEST_ADDR), {}
     for _ = 1, 14 do
         if q == 0 then break end
-        local len = mem:read_u8(q + 2) & 0x3F
+        local len = mem:read_u8(q + 4) & 0x3F
         local s = ""
-        for i = 0, len - 1 do s = s .. string.char(mem:read_u8(q + 3 + i)) end
+        for i = 0, len - 1 do s = s .. string.char(mem:read_u8(q + 5 + i)) end
         names[#names + 1] = s
         q = w(q)
     end

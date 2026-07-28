@@ -37,6 +37,7 @@ ColdStart:
         lda     #>BANNER
         sta     TMP2+1
         jsr     PutStr
+        jsr     BuildIndex              ; hash the built-in dictionary
         lda     #<BOOTSRC               ; the interpreter reads this first,
         sta     SRC                     ; then switches to the keyboard
         lda     #>BOOTSRC
@@ -55,11 +56,9 @@ ColdStart:
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
 
-BANNER: .byte   "A2FORTH OS  V0.5", $0D
-        .byte   "6502 DIRECT-THREADED FORTH", $0D
-        .byte   "APPLE //E  128K  SLOT 6 DRIVE 1", $0D
-        .byte   $0D
-        .byte   "INITIALIZING...", $0D, $00
+; Nothing but this until the graphics come up: the identity of the machine
+; belongs on the splash screen, not scrolling past on the text screen.
+BANNER: .byte   "INITIALIZING...", $0D, $00
 
 ; The system's own source, interpreted at boot before the keyboard is read.
 ; Written as real Forth in src/system.fth and converted by tools/mkboot.py.
@@ -78,6 +77,13 @@ NCNT:    .byte  0
 NNEG:    .byte  0
 FFLAGS:  .byte  0                       ; flags byte of the header being tested
 FCHR:    .byte  0
+NBKT:    .byte  0                       ; bucket of the header being created
+
+; Sixteen hash buckets, two bytes each.  BUCKETS holds each chain's head and
+; is live for the life of the system; BTAILS is scratch that BuildIndex uses
+; once at cold start to append in definition order.
+BUCKETS: .res   32
+BTAILS:  .res   32
 NEWHDR:  .word  0                       ; header being built
 STRLEN:  .word  0                       ; count byte of a compiling string
 CFLO:    .byte  0

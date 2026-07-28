@@ -1,5 +1,5 @@
 \ ===========================================================================
-\ system.fth -- A2FORTH OS, the part of the system written in Forth
+\ system.fth -- 2E FORTH OS, the part of the system written in Forth
 \
 \ Interpreted at boot, before the keyboard is read.  Definitions must appear
 \ before their first use, so the order here is: primitives' helpers, shapes,
@@ -202,7 +202,7 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
 
 \ --- the menu bar ----------------------------------------------------------
 : MENUBAR 3 HCOLOR 0 559 0 9 HBOX
-  0 0 TAT -1 TINV T." A2FORTH OS  V0.5   560X192 DOUBLE HI-RES"
+  0 0 TAT -1 TINV T." 2E FORTH OS  V0.5   560X192 DOUBLE HI-RES"
   67 0 TAT T." FREE " NFREE @ T3 0 TINV ;
 
 \ --- painting --------------------------------------------------------------
@@ -275,11 +275,12 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
 
 \ --- boot ------------------------------------------------------------------
 : SPLASH HGR 3 HCOLOR
-  35 8 TAT T." A2FORTH OS"
+  34 8 TAT T." 2E FORTH OS"
   34 10 TAT T." VERSION 0.5"
   26 12 TAT T." 6502 DIRECT-THREADED FORTH"
   22 14 TAT T." APPLE //e  128K  560X192 MONOCHROME"
-  30 17 TAT T." READING CATALOG..."
+  30 17 TAT T." (C) 2026 KEITH ADLER"
+  30 19 TAT T." READING CATALOG..."
   CATLOAD FREE NFREE !
   60000 0 DO LOOP ;
 : DESKTOP HGR 0 NWIN ! -1 GRAB ! 0 ESEL ! 0 ETOP !

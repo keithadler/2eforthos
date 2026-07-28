@@ -42,6 +42,9 @@ MACHINE ?= apple2ee
 # MAME's monitor-type config selects B&W, which is what makes 560x192 read as
 # 560 monochrome pixels.  Written before each run so it is never lost.
 MONITOR ?= 4
+# Emulation speed multiplier for `make gui`, e.g. SPEED=8 to boot quickly.
+# Empty means true 1 MHz.
+SPEED ?=
 MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
                -window -nomaximize -snapshot_directory $(SHOTS) \
                -cfg_directory $(CURDIR)/cfg
@@ -107,7 +110,7 @@ run: $(DSK) monitor
 	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
 
 gui: $(DSK) monitor
-	mame $(MAME_COMMON) -flop1 $(DSK)
+	mame $(MAME_COMMON) -flop1 $(DSK) $(if $(SPEED),-speed $(SPEED))
 
 poke:
 	./run.sh $(SRCDIR)/$(PROG).s
