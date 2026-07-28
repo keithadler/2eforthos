@@ -58,6 +58,7 @@ VARIABLE AX1 VARIABLE AX2 VARIABLE AY1 VARIABLE AY2
 \ records: type, size, then where the entry came from (catalog track, sector
 \ and byte offset) so it can be written back, then the 30-char name.
 $0800 CONSTANT SECBUF  $1000 CONSTANT CATBUF
+$0900 CONSTANT VTOCBUF  $0A00 CONSTANT TSBUF
 VARIABLE NFILE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 : CATENT 36 * CATBUF + ;
 : CATADD ESRC !
@@ -122,6 +123,8 @@ VARIABLE ECOL VARIABLE EROW VARIABLE EROWS VARIABLE ETROW
   ECOL @ EROW @ 1- TAT T."  NAME                T SIZ"
   NFILE @ ETOP @ - EROWS @ MIN
   DUP 0> IF 0 DO ETOP @ I + ELINE LOOP ELSE DROP THEN ;
+: ESCROLL EGEOM ETOP @ + DUP 0< IF DROP 0 THEN
+  NFILE @ EROWS @ - 0 MAX MIN ETOP ! ;
 : EPICK EGEOM PTRY 8 / EROW @ - ETOP @ +
   DUP 0< IF DROP EXIT THEN
   DUP NFILE @ < IF ESEL ! ELSE DROP THEN ;
@@ -134,6 +137,66 @@ VARIABLE FA
   FA @ 2 + C@ FA @ 3 + C@ SECBUF RSECT DROP
   SECBUF FA @ 4 + C@ + 2 +
   DUP C@ 128 XOR SWAP C!
+  FA @ 2 + C@ FA @ 3 + C@ SECBUF WSECT DROP
+  CATLOAD ;
+
+\ A DO LOOP always runs once, so a zero shift count needs guarding.
+: 1<< 1 SWAP DUP 0> IF 0 DO 2* LOOP ELSE DROP THEN ;
+
+\ Mark one sector free in the VTOC image held in VTOCBUF.  Four bytes per
+\ track: byte 0 covers sectors 15-8, byte 1 covers 7-0, a set bit means free.
+VARIABLE FT VARIABLE FS VARIABLE FB
+: FREESEC FS ! FT !
+  FT @ 4 * 56 + VTOCBUF + FB !
+  FS @ 8 < IF
+    FB @ 1+ DUP C@ FS @ 1<< OR SWAP C!
+  ELSE
+    FB @ DUP C@ FS @ 8 - 1<< OR SWAP C!
+  THEN ;
+
+\ Walk a file's track/sector list, freeing every data sector it names and
+\ then the list sectors themselves.  Track 0 is DOS and is never allocated
+\ to a file, so a zero track byte means an unused slot.
+VARIABLE TLT VARIABLE TLS
+: FREEFILE TLS ! TLT !
+  BEGIN TLT @ WHILE
+    TLT @ TLS @ TSBUF RSECT DROP
+    122 0 DO TSBUF 12 + I 2* +
+      DUP C@ 0= IF DROP ELSE
+      DUP C@ SWAP 1+ C@ FREESEC THEN LOOP
+    TSBUF 1+ C@ TSBUF 2 + C@
+    TLT @ TLS @ FREESEC
+    TLS ! TLT !
+  REPEAT ;
+
+\ Delete: free the sectors, then mark the catalog entry the way DOS does --
+\ the first track byte moves to the last byte of the name and $FF takes its
+\ place.  Locked files are refused, which is what the lock is for.
+: FDEL NFILE @ 0= IF EXIT THEN
+  ESEL @ CATENT C@ 128 AND IF EXIT THEN
+  ESEL @ CATENT FA !
+  17 0 VTOCBUF RSECT DROP
+  FA @ 2 + C@ FA @ 3 + C@ SECBUF RSECT DROP
+  SECBUF FA @ 4 + C@ +
+  DUP C@ OVER 1+ C@ FREEFILE
+  DUP C@ OVER 32 + C!
+  255 SWAP C!
+  FA @ 2 + C@ FA @ 3 + C@ SECBUF WSECT DROP
+  17 0 VTOCBUF WSECT DROP
+  CATLOAD FREE NFREE !
+  ESEL @ NFILE @ < 0= IF 0 ESEL ! THEN ;
+
+\ Rename: names are stored high-bit set and space padded to 30 characters.
+VARIABLE NADR VARIABLE NLEN VARIABLE NDST
+: FREN NFILE @ 0= IF EXIT THEN
+  ESEL @ CATENT FA !
+  ." NAME? " ASKLN NLEN ! NADR !
+  NLEN @ 0= IF EXIT THEN
+  NLEN @ 30 > IF 30 NLEN ! THEN
+  FA @ 2 + C@ FA @ 3 + C@ SECBUF RSECT DROP
+  SECBUF FA @ 4 + C@ + 3 + NDST !
+  30 0 DO 160 NDST @ I + C! LOOP
+  NLEN @ 0 DO NADR @ I + C@ 128 OR NDST @ I + C! LOOP
   FA @ 2 + C@ FA @ 3 + C@ SECBUF WSECT DROP
   CATLOAD ;
 
@@ -201,6 +264,10 @@ VARIABLE GRAB VARIABLE DX VARIABLE DY
   DUP 32 = IF CLICK THEN
   DUP 77 = IF MREAD THEN
   DUP 84 = IF FLOCK REPAINT THEN
+  DUP 88 = IF FDEL REPAINT THEN
+  DUP 82 = IF FREN REPAINT THEN
+  DUP 85 = IF -1 ESCROLL REPAINT THEN
+  DUP 68 = IF 1 ESCROLL REPAINT THEN
   81 = IF 0 RUNF ! THEN ;
 : DESK -1 RUNF ! REPAINT
   BEGIN RUNF @ WHILE KEY? IF EVENT THEN REPEAT ;

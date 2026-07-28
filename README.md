@@ -22,9 +22,18 @@ sits in the bottom four text lines — `12 34 * .` prints `408`.
 |---|---|
 | `I` `J` `K` `L` | move the pointer |
 | space | click — select a file, raise/carry a window, or close one |
-| `T` | lock/unlock the selected file (writes the catalog back) |
+| `T` | lock / unlock the selected file |
+| `X` | delete the selected file (refused if locked) |
+| `R` | rename it — type the new name at the prompt |
+| `U` `D` | scroll the file list |
 | `M` | read the joystick |
 | `Q` | leave the event loop |
+
+**The OS writes to its own disk.** Lock, rename and delete all go through to
+the image, and MAME writes it back — delete a file inside the emulator and
+`a2kit catalog -d build/forth.dsk` on the host agrees it is gone. `make run`
+therefore boots a scratch copy so automated runs stay reproducible; `make gui`
+uses the real image, so changes you make interactively stick.
 
 Boot takes about 32 emulated seconds, most of it compiling the system's own
 Forth source (see *Bootstrap cost* below).
@@ -101,7 +110,8 @@ input     KEY? KEYC BTN PADDLE
 disk      RSECT WSECT
 memory    CMOVE
 windows   HFRAME WINDOW ADDWIN PAINT REPAINT HIT RAISE CLICK PSTEP DESK
-files     CATLOAD FREE EXPLORER EPICK FLOCK
+files     CATLOAD FREE EXPLORER EPICK ESCROLL FLOCK FDEL FREN
+terminal  ASKLN
 ```
 
 Numbers accept a leading `-` and a `$` prefix for hex.
@@ -225,9 +235,25 @@ row.
 
 Clicking it selects a file rather than raising or dragging, which is also why
 it never leaves the back of the z-order — everything else can be raised over
-it. `T` toggles the lock bit on the selected file: read the catalog sector,
-flip bit 7 of the type byte, write the sector back, reload. That is the only
-thing in the system that writes to the disk.
+it.
+
+The three operations that change the disk all work the same way: read the
+catalog sector the entry came from, edit it, write it back, reload.
+
+- **Lock** flips bit 7 of the type byte.
+- **Rename** rewrites the 30-byte name field, high-bit set and space padded,
+  from a line read with `ASKLN`. That word copies the typed text straight out
+  of `TIB` into its own buffer, because `TIB` is also the outer interpreter's
+  input buffer.
+- **Delete** is the involved one, and it is the reason catalog records keep
+  their origin. It walks the file's track/sector list freeing every data
+  sector in the VTOC bitmap, then the list sectors themselves, then marks the
+  entry the way DOS does — the first track byte moves to the last byte of the
+  name and `$FF` takes its place — and writes both the catalog sector and the
+  VTOC back. A locked file is refused, which is what the lock is for.
+
+A track byte of zero means an unused slot in a track/sector list, which is
+unambiguous because track 0 is DOS and never allocated to a file.
 
 ## Memory map
 

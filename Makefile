@@ -15,7 +15,7 @@ PROG    ?= forth
 SRCDIR  ?= src
 ORG     ?= 0x4000
 VOLUME  ?= 254
-SECS    ?= 32
+SECS    ?= 42
 
 A2KIT   := $(HOME)/.cargo/bin/a2kit
 ROMS    := $(CURDIR)/roms
@@ -24,6 +24,7 @@ SHOTS   := $(CURDIR)/shots
 SRCS    := $(wildcard $(SRCDIR)/*.s)
 # forth.s pulls the system in with .include, so every .inc is a dependency
 INCS    := $(wildcard src/*.inc)
+DISKFILES := $(wildcard disk/*)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/bootsrc.inc
@@ -75,15 +76,20 @@ $(DSK): $(BIN)
 	  | $(A2KIT) tokenize -t atxt -a 2049 \
 	  | $(A2KIT) put -d $@ -f HELLO -t atok
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
-	@$(A2KIT) put -d $@ -f README -t txt < DISK.TXT
+	@for f in $(DISKFILES); do \
+	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
 	@$(A2KIT) catalog -d $@
 
 # -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)
 # emulated seconds cost about a second of wall clock.  Timing stays exact --
 # the emulation is deterministic, only the real-time pacing is dropped.
+# The OS writes to its own disk (delete, rename, lock), and MAME writes those
+# changes back to the image.  Automated runs boot a scratch copy so they stay
+# reproducible; `make gui` uses the real image so interactive changes stick.
 run: $(DSK)
 	@rm -rf $(SHOTS)/apple2p
-	mame $(MAME_COMMON) -flop1 $(DSK) -nothrottle -seconds_to_run $(SECS)
+	@cp $(DSK) build/run.dsk
+	mame $(MAME_COMMON) -flop1 build/run.dsk -nothrottle -seconds_to_run $(SECS)
 	@echo "screenshot -> $(SHOTS)/apple2p/0000.png"
 
 gui: $(DSK)
