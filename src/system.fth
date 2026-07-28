@@ -211,7 +211,7 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
 
 \ --- the menu bar ----------------------------------------------------------
 : MENUBAR 3 HCOLOR 0 559 0 9 HBOX
-  0 0 TAT -1 TINV T." 2E FORTH OS  V0.5   560X192 DOUBLE HI-RES"
+  0 0 TAT -1 TINV T." 2E FORTH OS  V0.5"
   67 0 TAT T." FREE " NFREE @ T3 0 TINV ;
 
 \ --- desktop icons ---------------------------------------------------------
