@@ -1,10 +1,14 @@
 \ ===========================================================================
 \ system.fth -- 2E FORTH OS, the part of the system written in Forth
 \
+\ The system boots to an 80-column console and stops at the Forth prompt.
+\ There is no windowing environment: the graphics screen is something the
+\ language turns on when a program wants it, with HGR, and leaves with TEXT.
+\
 \ Interpreted at boot, before the keyboard is read.  Definitions must appear
-\ before their first use, so the order here is: primitives' helpers, shapes,
-\ the window list, disk, text, the explorer, painting, input, and finally the
-\ boot sequence itself on the last line.
+\ before their first use, so the order here is: words the kernel leaves to
+\ Forth, shapes, the disk catalog, the file commands, and the greeting on the
+\ last lines.
 \
 \ Comments and blank lines are stripped by tools/mkboot.py -- they cost both
 \ image space and boot time, since every token is looked up by linear search.
@@ -20,38 +24,24 @@
 : MIN 2DUP > IF SWAP THEN DROP ;
 : MAX 2DUP < IF SWAP THEN DROP ;
 : SPACE 32 EMIT ;
+: SPACES 0 DO SPACE LOOP ;
 : /MOD U/MOD ;
 : / U/MOD NIP ;
 : MOD U/MOD DROP ;
+: TYPE 0 DO DUP I + C@ 127 AND EMIT LOOP DROP ;
+
+\ Fixed-width digits, for columns that have to line up.
+: .D 48 + EMIT ;
+: .2 DUP 10 / .D 10 MOD .D ;
+: .3 DUP 100 / .D DUP 10 / 10 MOD .D 10 MOD .D ;
 
 \ --- shapes ----------------------------------------------------------------
+\ The drawing words in the kernel plot, span and fill; a rectangle outline is
+\ four spans, which is cheaper to write here than to carry in the image.
 VARIABLE FX1 VARIABLE FX2 VARIABLE FY1 VARIABLE FY2
 : HFRAME FY2 ! FY1 ! FX2 ! FX1 !
   FX1 @ FX2 @ FY1 @ HLINE  FX1 @ FX2 @ FY2 @ HLINE
   FX1 @ FY1 @ FY2 @ HVLINE  FX2 @ FY1 @ FY2 @ HVLINE ;
-
-\ black interior, white frame, title bar with a close box
-VARIABLE WX1 VARIABLE WX2 VARIABLE WY1 VARIABLE WY2
-: WINDOW WY2 ! WY1 ! WX2 ! WX1 !
-  0 HCOLOR WX1 @ WX2 @ WY1 @ WY2 @ HBOX
-  3 HCOLOR WX1 @ WX2 @ WY1 @ WY2 @ HFRAME
-  WX1 @ WX2 @ WY1 @ WY1 @ 8 + HBOX
-  0 HCOLOR WX1 @ 3 + WX1 @ 9 + WY1 @ 2 + WY1 @ 6 + HBOX ;
-
-\ --- the window list -------------------------------------------------------
-\ Array order is z-order: the last record is the frontmost window.
-4 CONSTANT MAXWIN
-CREATE WINS 40 ALLOT  CREATE WTMP 10 ALLOT
-VARIABLE NWIN
-: W' 10 * WINS + ;
-: .X1 W' ;  : .X2 W' 2 + ;
-: .Y1 W' 4 + ;  : .Y2 W' 6 + ;
-VARIABLE AX1 VARIABLE AX2 VARIABLE AY1 VARIABLE AY2
-: ADDWIN AY2 ! AY1 ! AX2 ! AX1 !
-  NWIN @ MAXWIN < IF
-    AX1 @ NWIN @ .X1 !  AX2 @ NWIN @ .X2 !
-    AY1 @ NWIN @ .Y1 !  AY2 @ NWIN @ .Y2 !
-    1 NWIN +! THEN ;
 
 \ --- the DOS 3.3 catalog ---------------------------------------------------
 \ SECBUF takes one raw sector; CATBUF holds the parsed catalog as 36-byte
@@ -59,7 +49,7 @@ VARIABLE AX1 VARIABLE AX2 VARIABLE AY1 VARIABLE AY2
 \ and byte offset) so it can be written back, then the 30-char name.
 $0800 CONSTANT SECBUF  $1000 CONSTANT CATBUF
 $0900 CONSTANT VTOCBUF  $0A00 CONSTANT TSBUF
-VARIABLE NFILE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
+VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 : CATENT 36 * CATBUF + ;
 : CATADD ESRC !
   NFILE @ 60 < IF
@@ -91,62 +81,40 @@ VARIABLE NFILE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
   35 0 DO SECBUF 56 + I 4 * +
     DUP C@ BITS SWAP 1+ C@ BITS + + LOOP ;
 
-\ --- text on the graphics screen -------------------------------------------
-: TTYPE 0 DO DUP I + C@ 127 AND TEMIT LOOP DROP ;
-: TDIG 48 + TEMIT ;
-: T3 DUP 100 / TDIG DUP 10 / 10 MOD TDIG 10 MOD TDIG ;
-\ Signed, no leading zeros: digits come out backwards so they go to a buffer
-\ first.  T3 above is fixed-width for the size column; this is for the
-\ calculator, where 7 and 1000000 must both look right.
-CREATE NBUF 8 ALLOT  VARIABLE NLEN
-: T# DUP 0< IF 45 TEMIT NEGATE THEN
-  0 NLEN !
-  BEGIN 10 U/MOD SWAP 48 + NBUF NLEN @ + C! 1 NLEN +! DUP 0= UNTIL DROP
-  NLEN @ 0 DO NBUF NLEN @ 1- I - + C@ TEMIT LOOP ;
-
 : FTYPE 127 AND
   DUP 4 = IF DROP 66 EXIT THEN
   DUP 2 = IF DROP 65 EXIT THEN
   DUP 1 = IF DROP 73 EXIT THEN
   DUP 0= IF DROP 84 EXIT THEN DROP 63 ;
 
-\ --- the explorer ----------------------------------------------------------
-\ Window 0 is the file browser.  Its text grid is derived from the window
-\ rectangle rather than fixed, so it stays correct wherever the window is.
-VARIABLE ESEL VARIABLE ETOP VARIABLE NFREE
-VARIABLE ECOL VARIABLE EROW VARIABLE EROWS VARIABLE ETROW
-\ The window's top edge is a multiple of 8, so its title bar lines up exactly
-\ with a text row: title on ETROW, column header two below, list from there.
-: EGEOM 0 .X1 @ 5 + 7 / ECOL !
-  0 .Y1 @ 8 / ETROW !
-  ETROW @ 3 + EROW !
-  0 .Y2 @ 0 .Y1 @ - 24 - 8 / EROWS ! ;
-: ELINE DUP ETOP @ - EROW @ + ECOL @ SWAP TAT
-  DUP ESEL @ = TINV
-  DUP CATENT C@ 128 AND IF 42 ELSE 32 THEN TEMIT
-  DUP CATENT 6 + 30 TTYPE 32 TEMIT
-  DUP CATENT C@ FTYPE TEMIT 32 TEMIT
-  CATENT 1+ C@ T3 32 TEMIT 0 TINV ;
-: EXPLORER EGEOM
-  ECOL @ ETROW @ TAT -1 TINV T." DISK CATALOG" 0 TINV
-  ECOL @ EROW @ 1- TAT T."  NAME                           T SIZ "
-  NFILE @ ETOP @ - EROWS @ MIN
-  DUP 0> IF 0 DO ETOP @ I + ELINE LOOP ELSE DROP THEN ;
-: ESCROLL EGEOM ETOP @ + DUP 0< IF DROP 0 THEN
-  NFILE @ EROWS @ - 0 MAX MIN ETOP ! ;
-: EPICK EGEOM PTRY 8 / EROW @ - ETOP @ +
-  DUP 0< IF DROP EXIT THEN
-  DUP NFILE @ < IF ESEL ! ELSE DROP THEN ;
+\ --- listing the disk ------------------------------------------------------
+\ Locked files are starred, the way DOS itself listed them.
+: .ENT DUP .2 SPACE
+  DUP CATENT C@ 128 AND IF 42 ELSE 32 THEN EMIT
+  DUP CATENT 6 + 30 TYPE SPACE
+  DUP CATENT C@ FTYPE EMIT SPACE
+  CATENT 1+ C@ .3 ;
+: CAT
+  ."  #  NAME                           T SIZ" CR
+  NFILE @ 0 DO I .ENT CR LOOP
+  NFREE @ . ." SECTORS FREE" CR ;
 
-\ Toggle the lock bit of the selected file and write the catalog sector back.
-\ This is the only thing in the system that writes to the disk.
+\ --- the file commands -----------------------------------------------------
+\ Each takes the number CAT printed.  An index outside the catalog is refused
+\ rather than trusted, because every one of these writes to the disk.
 VARIABLE FA
-: FLOCK NFILE @ 0= IF EXIT THEN
-  ESEL @ CATENT FA !
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DREAD DROP
-  SECBUF FA @ 4 + C@ + 2 +
+: FPICK DUP 0< OVER NFILE @ < 0= OR
+  IF DROP 0 ." NO SUCH FILE" CR EXIT THEN
+  CATENT FA ! -1 ;
+: FSEC FA @ 2 + C@ FA @ 3 + C@ ;
+: FENTRY SECBUF FA @ 4 + C@ + ;
+
+\ Toggle the lock bit and write the catalog sector back.
+: LOCK FPICK 0= IF EXIT THEN
+  FSEC SECBUF DREAD DROP
+  FENTRY 2 +
   DUP C@ 128 XOR SWAP C!
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DWRITE DROP
+  FSEC SECBUF DWRITE DROP
   CATLOAD ;
 
 \ A DO LOOP always runs once, so a zero shift count needs guarding.
@@ -181,267 +149,53 @@ VARIABLE TLT VARIABLE TLS
 \ Delete: free the sectors, then mark the catalog entry the way DOS does --
 \ the first track byte moves to the last byte of the name and $FF takes its
 \ place.  Locked files are refused, which is what the lock is for.
-: FDEL NFILE @ 0= IF EXIT THEN
-  ESEL @ CATENT C@ 128 AND IF EXIT THEN
-  ESEL @ CATENT FA !
+: DEL FPICK 0= IF EXIT THEN
+  FA @ C@ 128 AND IF ." FILE IS LOCKED" CR EXIT THEN
   17 0 VTOCBUF DREAD DROP
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DREAD DROP
-  SECBUF FA @ 4 + C@ +
+  FSEC SECBUF DREAD DROP
+  FENTRY
   DUP C@ OVER 1+ C@ FREEFILE
   DUP C@ OVER 32 + C!
   255 SWAP C!
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DWRITE DROP
+  FSEC SECBUF DWRITE DROP
   17 0 VTOCBUF DWRITE DROP
-  CATLOAD FREE NFREE !
-  ESEL @ NFILE @ < 0= IF 0 ESEL ! THEN ;
+  CATLOAD FREE NFREE ! ;
 
 \ Rename: names are stored high-bit set and space padded to 30 characters.
 VARIABLE NADR VARIABLE NLEN VARIABLE NDST
-: FREN NFILE @ 0= IF EXIT THEN
-  ESEL @ CATENT FA !
+: REN FPICK 0= IF EXIT THEN
   ." NAME? " ASKLN NLEN ! NADR !
   NLEN @ 0= IF EXIT THEN
   NLEN @ 30 > IF 30 NLEN ! THEN
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DREAD DROP
-  SECBUF FA @ 4 + C@ + 3 + NDST !
+  FSEC SECBUF DREAD DROP
+  FENTRY 3 + NDST !
   30 0 DO 160 NDST @ I + C! LOOP
   NLEN @ 0 DO NADR @ I + C@ 128 OR NDST @ I + C! LOOP
-  FA @ 2 + C@ FA @ 3 + C@ SECBUF DWRITE DROP
+  FSEC SECBUF DWRITE DROP
   CATLOAD ;
 
-\ --- the menu bar ----------------------------------------------------------
-: MENUBAR 3 HCOLOR 0 559 0 9 HBOX
-  0 0 TAT -1 TINV T." 2E FORTH OS  V0.5"
-  67 0 TAT T." FREE " NFREE @ T3 0 TINV ;
-
-\ --- desktop icons ---------------------------------------------------------
-\ Four bytes each: byte column, top raster row, which bitmap, and what a
-\ double click opens.  Icons sit on even byte columns because a 14-pixel icon
-\ is two screen bytes and lands there without shifting.
-3 CONSTANT NICON
-CREATE ICONS
-  70 C, 24 C, 0 C, 1 C,
-  70 C, 64 C, 1 C, 2 C,
-  70 C, 104 C, 2 C, 3 C,
-: IREC 4 * ICONS + ;
-: I.COL IREC C@ ;
-: I.ROW IREC 1+ C@ ;
-: I.PIC IREC 2 + C@ ;
-: I.ACT IREC 3 + C@ ;
-VARIABLE ISEL
-: ILABEL DUP I.COL OVER I.ROW 16 + 8 / TAT
-  DUP ISEL @ = TINV
-  I.PIC DUP 0 = IF DROP T." CALC" ELSE
-        DUP 1 = IF DROP T." DISK" ELSE DROP T." INFO" THEN THEN
-  0 TINV ;
-: DRAWICONS NICON 0 DO I I.COL I I.ROW I I.PIC ICON I ILABEL LOOP ;
-VARIABLE IFOUND
-: ICONHIT -1 IFOUND !
-  NICON 0 DO
-    PTRX I I.COL 7 * < 0=
-    PTRX I I.COL 7 * 14 + < AND
-    PTRY I I.ROW < 0= AND
-    PTRY I I.ROW 24 + < AND
-    IF I IFOUND ! THEN LOOP IFOUND @ ;
-
-\ Broken cycles: PAINT must redraw the calculator, but the calculator needs
-\ REPAINT, which needs PAINT.  Likewise CLICK opens an application defined
-\ further down.  Both go through a vector that is filled in later.
-VARIABLE CALCON
-VARIABLE CALCWIN                        \ which window the calculator is, or -1
-VARIABLE 'CDRAW  VARIABLE 'OPEN
-: DRAWCALC 'CDRAW @ DUP IF EXECUTE ELSE DROP THEN ;
-: OPENAPP 'OPEN @ DUP IF EXECUTE ELSE 2DROP THEN ;
-
-\ --- painting --------------------------------------------------------------
-\ No backing store: everything is redrawn back to front, which is what makes
-\ overlap and z-order free.
-: PAINT 2 HCOLOR 0 559 0 191 HBOX MENUBAR
-  NWIN @ 0 DO
-    I .X1 @ I .X2 @ I .Y1 @ I .Y2 @ WINDOW
-    I 0= IF EXPLORER THEN
-    I CALCWIN @ = IF DRAWCALC THEN LOOP
-  DRAWICONS ;
-: REPAINT PTRHIDE PAINT PTRSHOW ;
-
-\ --- hit testing -----------------------------------------------------------
-VARIABLE HX0 VARIABLE HY0 VARIABLE HN VARIABLE FOUND
-: IN? HN !
-  HX0 @ HN @ .X1 @ < IF 0 EXIT THEN
-  HX0 @ HN @ .X2 @ > IF 0 EXIT THEN
-  HY0 @ HN @ .Y1 @ < IF 0 EXIT THEN
-  HY0 @ HN @ .Y2 @ > IF 0 EXIT THEN -1 ;
-: HIT HY0 ! HX0 ! -1 FOUND !
-  NWIN @ 0 DO I IN? IF I FOUND ! THEN LOOP FOUND @ ;
-: INTITLE? HN ! HY0 @ HN @ .Y1 @ 8 + > IF 0 EXIT THEN -1 ;
-: INCLOSE? HN ! HX0 @ HN @ .X1 @ 10 + > IF 0 EXIT THEN -1 ;
-
-\ --- raise: shuffle a record to the end of the array ------------------------
-: RAISE DUP NWIN @ 1- < 0= IF DROP EXIT THEN
-  DUP W' WTMP 10 CMOVE
-  NWIN @ 1- SWAP DO I 1+ W' I W' 10 CMOVE LOOP
-  WTMP NWIN @ 1- W' 10 CMOVE ;
-
-\ --- dragging and clicking -------------------------------------------------
-VARIABLE GRAB
-
-\ A repaint of the whole desktop is a single pass of the event loop and takes
-\ about half a second, so a window cannot be redrawn at every step of a drag.
-\ What follows the pointer instead is an XORed outline: four lines to draw,
-\ and the same four to erase, because XOR is its own inverse.  The window
-\ itself moves once, when the button comes back up.
-VARIABLE BX1 VARIABLE BX2 VARIABLE BY1 VARIABLE BY2 VARIABLE BSHOWN
-: BFRAME 3 HCOLOR -1 HXOR
-  BX1 @ BX2 @ BY1 @ BY2 @ HFRAME  0 HXOR ;
-\ The arrow is XORed in too, and two XORs over the same pixel cancel, so it
-\ comes off the screen before the outline is touched.
-: BFLIP PTRHIDE BFRAME PTRSHOW ;
-: BSHOW BSHOWN @ IF EXIT THEN BFLIP -1 BSHOWN ! ;
-: BHIDE BSHOWN @ 0= IF EXIT THEN BFLIP 0 BSHOWN ! ;
-: BSET GRAB @ DUP .X1 @ BX1 ! DUP .X2 @ BX2 !
-  DUP .Y1 @ BY1 ! .Y2 @ BY2 ! ;
-: BMOVE SWAP DUP BX1 +! BX2 +!  DUP BY1 +! BY2 +! ;
-: BDRAG BHIDE BMOVE BSHOW ;
-: BCOMMIT GRAB @
-  DUP BX1 @ SWAP .X1 !  DUP BX2 @ SWAP .X2 !
-  DUP BY1 @ SWAP .Y1 !      BY2 @ SWAP .Y2 ! ;
-: BDROP BHIDE BCOMMIT -1 GRAB ! REPAINT ;
-
-: CLOSEW -1 NWIN +! -1 GRAB !
-  NWIN @ CALCWIN @ = IF -1 CALCWIN ! 0 CALCON ! THEN ;
-
-\ Two clicks close together in time and place.  There is no clock in this
-\ machine, so "close in time" is counted in event loop passes -- roughly 150
-\ a second, which makes 40 about a quarter of a second.
-VARIABLE LASTCLK VARIABLE LASTCX VARIABLE LASTCY
-\ Counted in event loop passes, of which there are on the order of a hundred
-\ and fifty a second.  A whole-desktop repaint is a single pass that takes
-\ half a second, which is why selecting an icon redraws only the icons: a
-\ repaint between the two clicks stalls the count and swallows the second
-\ keypress before the loop can read it.
-150 CONSTANT DCLICK
-: NEAR? - ABS 14 < ;
-: DOUBLE? TICKS LASTCLK @ - DCLICK <
-  PTRX LASTCX @ NEAR? AND
-  PTRY LASTCY @ NEAR? AND ;
-: MARKCLK TICKS LASTCLK ! PTRX LASTCX ! PTRY LASTCY ! ;
-
-\ Window 0 is the explorer: clicking it selects a file rather than raising or
-\ dragging, which is also why it never leaves the back of the z-order.
-: CLICK GRAB @ 0< 0= IF BDROP EXIT THEN
-  ICONHIT DUP 0< 0= IF
-    DUP ISEL !
-    DOUBLE? IF I.ACT OPENAPP ELSE DROP PTRHIDE DRAWICONS PTRSHOW THEN
-    MARKCLK EXIT THEN
-  DROP MARKCLK
-  PTRX PTRY HIT DUP 0< IF DROP EXIT THEN
-  DUP 0= IF DROP EPICK REPAINT EXIT THEN
-  RAISE NWIN @ 1-
-  DUP INTITLE? IF
-    DUP INCLOSE? IF DROP CLOSEW REPAINT EXIT THEN
-    GRAB ! REPAINT BSET BSHOW EXIT THEN
-  DROP REPAINT ;
-
-: PMOVE PTRY + SWAP PTRX + SWAP PTRAT ;
-: PSTEP 2DUP PMOVE
-  GRAB @ 0< IF 2DROP EXIT THEN BDRAG ;
-
-\ --- the calculator --------------------------------------------------------
-\ The shape every four-function calculator has: digits accumulate into ENT,
-\ an operator pushes ENT into ACC and is remembered, = applies it.
-\ The calculator is a window in the list, not a picture drawn at fixed
-\ coordinates.  That is what makes it draggable: HIT only knows about windows
-\ in the list, so anything drawn outside it can never be picked up, raised or
-\ closed.  Its contents are laid out from the window's current rectangle, so
-\ they follow when it moves.
-VARIABLE ACC VARIABLE ENT VARIABLE OP VARIABLE FRESH
-VARIABLE CCX1 VARIABLE CCX2 VARIABLE CCY1 VARIABLE CCY2
-: CGEOM CALCWIN @ DUP .X1 @ CCX1 ! DUP .X2 @ CCX2 !
-  DUP .Y1 @ CCY1 ! .Y2 @ CCY2 ! ;
-: CDIGITS CCX1 @ 7 / 2 + CCY1 @ 24 + 8 / TAT T."             "
-  CCX1 @ 7 / 2 + CCY1 @ 24 + 8 / TAT ENT @ T# ;
-: CDRAW CALCWIN @ 0< IF EXIT THEN CGEOM
-  CCX1 @ 7 / 2 + CCY1 @ 8 / TAT -1 TINV T." CALCULATOR" 0 TINV
-  3 HCOLOR CCX1 @ 8 + CCX2 @ 8 - CCY1 @ 20 + CCY1 @ 36 + HFRAME
-  CDIGITS
-  CCX1 @ 7 / 2 + CCY2 @ 32 - 8 / TAT T." 0-9  + - * /  = C"
-  CCX1 @ 7 / 2 + CCY2 @ 24 - 8 / TAT T." Q CLOSES IT" ;
-: CCLEAR 0 ACC ! 0 ENT ! 0 OP ! -1 FRESH ! ;
-: CAPPLY OP @ 0 = IF ENT @ ACC ! EXIT THEN
-  OP @ 43 = IF ACC @ ENT @ + ACC ! EXIT THEN
-  OP @ 45 = IF ACC @ ENT @ - ACC ! EXIT THEN
-  OP @ 42 = IF ACC @ ENT @ * ACC ! EXIT THEN
-  OP @ 47 = IF ENT @ 0= IF 0 ACC ! ELSE ACC @ ENT @ / ACC ! THEN THEN ;
-: CDIGIT 48 - FRESH @ IF 0 ENT ! 0 FRESH ! THEN ENT @ 10 * + ENT ! ;
-: COP CAPPLY OP ! ACC @ ENT ! -1 FRESH ! ;
-: CEQ CAPPLY 0 OP ! ACC @ ENT ! -1 FRESH ! ;
-: CCLOSE -1 NWIN +! -1 CALCWIN ! 0 CALCON ! REPAINT ;
-: CKEY DUP 47 > OVER 58 < AND IF CDIGIT CDIGITS EXIT THEN
-  DUP 43 = OVER 45 = OR OVER 42 = OR OVER 47 = OR
-    IF COP CDIGITS EXIT THEN
-  DUP 61 = IF DROP CEQ CDIGITS EXIT THEN
-  DUP 67 = IF DROP CCLEAR CDIGITS EXIT THEN
-  DUP 81 = IF DROP CCLOSE EXIT THEN
-  DROP ;
-: CALC CALCON @ IF EXIT THEN
-  CCLEAR
-  154 350 40 128 ADDWIN
-  NWIN @ 1- CALCWIN !
-  -1 CALCON ! REPAINT ;
-: DOOPEN DUP 1 = IF DROP CALC EXIT THEN
-  DUP 2 = IF DROP 0 ESEL ! 0 ETOP ! REPAINT EXIT THEN
-  DROP ;
-' CDRAW 'CDRAW !
-' DOOPEN 'OPEN !
-
-\ --- the event loop --------------------------------------------------------
-10 CONSTANT STEP  VARIABLE RUNF VARIABLE BTNW
-: EVENT KEYC
-  CALCON @ IF
-    DUP 73 = OVER 74 = OR OVER 75 = OR OVER 76 = OR OVER 32 = OR 0=
-    IF CKEY EXIT THEN THEN
-  DUP 73 = IF 0 STEP NEGATE PSTEP THEN
-  DUP 75 = IF 0 STEP PSTEP THEN
-  DUP 74 = IF STEP NEGATE 0 PSTEP THEN
-  DUP 76 = IF STEP 0 PSTEP THEN
-  DUP 32 = IF CLICK THEN
-  DUP 77 = IF MREAD THEN
-  DUP 84 = IF FLOCK REPAINT THEN
-  DUP 88 = IF FDEL REPAINT THEN
-  DUP 82 = IF FREN REPAINT THEN
-  DUP 85 = IF -1 ESCROLL REPAINT THEN
-  DUP 68 = IF 1 ESCROLL REPAINT THEN
-  81 = IF 0 RUNF ! THEN ;
-\ Poll the game port every time round: MREAD ignores an unmoved stick, so the
-\ keyboard still works when nothing is plugged in.  The button fires CLICK on
-\ its press edge only, not for as long as it is held.
-\ MREAD moves the arrow itself, so the drag has to be worked out from where
-\ the arrow ended up rather than from a step the caller asked for.  Without
-\ this a window could be picked up with the mouse but never carried: only the
-\ keyboard's PSTEP moved what was held.
-VARIABLE OPX VARIABLE OPY
-: MOUSE PTRX OPX ! PTRY OPY ! MREAD
-  GRAB @ 0< 0= IF
-    PTRX OPX @ -  PTRY OPY @ -
-    2DUP OR IF BDRAG ELSE 2DROP THEN THEN
-  BTN BTNW @ 0= AND IF CLICK THEN
-  BTN BTNW ! ;
-: DESK -1 RUNF ! 0 BTNW ! 0 CALCON ! -1 ISEL ! 0 LASTCLK ! REPAINT
-  BEGIN RUNF @ WHILE TICK MOUSE KEY? IF EVENT THEN REPEAT
-  PTRHIDE TEXT ;
-
-\ --- boot ------------------------------------------------------------------
-: SPLASH HGR 3 HCOLOR
-  34 8 TAT T." 2E FORTH OS"
-  34 10 TAT T." VERSION 0.5"
-  26 12 TAT T." 6502 DIRECT-THREADED FORTH"
-  22 14 TAT T." APPLE //e  128K  560X192 MONOCHROME"
-  30 17 TAT T." (C) 2026 KEITH ADLER"
-  30 19 TAT T." READING CATALOG..."
+\ --- the greeting ----------------------------------------------------------
+: HELP
+  ." CAT              LIST THE DISK" CR
+  ." n LOCK           LOCK OR UNLOCK A FILE" CR
+  ." n DEL   n REN    DELETE OR RENAME ONE" CR
+  ." WORDS            EVERY DEFINITION IN THE DICTIONARY" CR
+  ." HGR   TEXT       GRAPHICS SCREEN ON, AND BACK TO HERE" CR
+  ." n HCOLOR         0 BLACK 1 GREY 2 GREY 3 WHITE" CR
+  ." flag HXOR        DRAW BY XOR, SO DRAWING TWICE ERASES" CR
+  ." x y HPLOT        x1 x2 y HLINE        x1 y1 x2 y2 HLINE2" CR
+  ." x y r HCIRCLE    x y r HDISC          HCLS" CR
+  ." x1 x2 y1 y2 HBOX AND HFRAME" CR
+  ." col row TAT      T. TEXT ON THE GRAPHICS SCREEN, flag TINV" CR
+  ." KEY? KEYC BTN    n PADDLE" CR
+  ." t s addr DREAD   t s addr DWRITE      RAW SECTORS" CR ;
+\ ." compiles an inline string, so it only says anything from inside a
+\ definition; at the top level it would build one nobody runs.
+: GREET PAGE
+  ." 2E FORTH OS  VERSION 1.0" CR
+  ." 6502 DIRECT-THREADED FORTH   APPLE //e  128K  80 COLUMNS" CR
+  ." (C) 2026 KEITH ADLER" CR CR
   CATLOAD FREE NFREE !
-  60000 0 DO LOOP ;
-: DESKTOP HGR 0 NWIN ! -1 GRAB ! 0 BSHOWN ! 0 HXOR
-  0 ESEL ! 0 ETOP ! -1 CALCWIN ! 0 CALCON !
-  8 340 16 184 ADDWIN
-  PAINT 280 96 PTRAT ;
-SPLASH DESKTOP DESK
+  NFILE @ . ." FILES, " NFREE @ . ." SECTORS FREE." CR
+  ." TYPE HELP FOR A SUMMARY." CR ;
+GREET

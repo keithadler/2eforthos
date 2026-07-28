@@ -1,19 +1,20 @@
 ; ---------------------------------------------------------------------------
-; forth.s -- a Forth system for the Apple //e, with a 560x192 monochrome
-; double hi-res screen driver.
+; forth.s -- a Forth system for the Apple //e: an 80-column console, and a
+; 560x192 monochrome double hi-res screen the language can draw on.
 ;
-; Memory map once BRUN from DOS 3.3:
+; The system boots to an 80-column console.  The graphics screen is a thing
+; the language can turn on, not the interface: HGR, TEXT and the drawing
+; words are ordinary Forth words.
 ;
+; Memory map:
+;
+;   $0400-$07FF   the text screen, in both banks -- the 80-column firmware
+;                 puts even columns in aux and odd ones in main
 ;   $0800-$0FFF   one raw disk sector
 ;   $1000-$1FFF   the parsed catalog, 36 bytes per file
 ;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main interleave
 ;                 byte by byte to make 560 pixels per row
-;   $4000-....    this kernel, then the dictionary growing upward.  Page 2
-;                 of hi-res used to live at $4000; the OS needs the room
-;                 more than it needs a back buffer.
-;   $9300-$95FF   DOS 3.3 file buffer (the greeting sets MAXFILES 1, which
-;                 hands about 2K back to the dictionary)
-;   $9600-$BFFF   DOS 3.3
+;   $4000-$BEFF   this kernel, then the dictionary growing upward
 ;
 ; The kernel is direct-threaded: a thread cell is a code field address and
 ; the inner interpreter ends in JMP (W).  See dict.inc for the layout.
@@ -28,8 +29,15 @@ ColdStart:
         ldx     #$FF                    ; return stack
         txs
         ldx     #DSTACK_TOP             ; data stack
-        jsr     HgrText
         stx     XSAV
+        jsr     HgrText
+        ; The //e has an 80-column driver in ROM: it scrolls both banks, keeps
+        ; the cursor, and understands the monitor's control codes.  Entering it
+        ; costs two calls and nothing in the image.  It takes over CSW and KSW,
+        ; so nothing here may set those afterwards -- COUT and GETLN reach it
+        ; through them.
+        jsr     SETTXT
+        jsr     C3INIT
         jsr     HOME
         ldx     XSAV
         lda     #<BANNER
@@ -37,18 +45,6 @@ ColdStart:
         lda     #>BANNER
         sta     TMP2+1
         jsr     PutStr
-        ; DOS hooks the monitor's character vectors, so every COUT call runs
-        ; through its code at $9600.  Nothing hooks them now -- DOS is not on
-        ; the disk at all -- but setting them explicitly costs four stores and
-        ; means the kernel does not depend on what happened to be there.
-        lda     #<COUT1
-        sta     CSW
-        lda     #>COUT1
-        sta     CSW+1
-        lda     #<KEYIN
-        sta     KSW
-        lda     #>KEYIN
-        sta     KSW+1
         jsr     BuildIndex              ; hash the built-in dictionary
         jsr     D2BuildTable            ; invert the 6-and-2 nibble table
         lda     #<BOOTSRC               ; the interpreter reads this first,
@@ -61,19 +57,17 @@ ColdStart:
 .include "kernel.inc"
 .include "interp.inc"
 .include "gwords.inc"
-.include "pointer.inc"
-.include "disk.inc"
+.include "input.inc"
 .include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
 .include "gfx.inc"
-.include "icon.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
 
-; Nothing but this until the graphics come up: the identity of the machine
-; belongs on the splash screen, not scrolling past on the text screen.
+; The system's own banner is printed from Forth once the dictionary is up.
+; This is only what the kernel says while it is still building it.
 BANNER: .byte   "INITIALIZING...", $0D, $00
 
 ; The system's own source, interpreted at boot before the keyboard is read.
@@ -107,25 +101,9 @@ CFHI:    .byte  0
 NUMBUF:  .res   8                       ; digits, emitted in reverse
 
 ; $80 makes the drawing words XOR what they draw instead of replacing it, so
-; the same call both draws and erases.  Dragging a window needs an outline
-; that appears and disappears without a repaint underneath it.
+; the same call both draws and erases: drawing a shape twice leaves the screen
+; as it was found.
 HXORF:   .byte  0
-
-PX:      .word  140                     ; pointer position
-PY:      .byte  80
-PVIS:    .byte  0                       ; is the arrow currently XORed in?
-PCOL:    .byte  0                       ; byte column it lands in
-PSHIFT:  .byte  0                       ; and how far into that byte
-PROW:    .byte  0
-PSH:     .word  0                       ; one shape row, shifted into place
-PTMP:    .word  0
-PXTMP:   .word  0                       ; pointer byte being merged
-PLASTX:  .byte  128                     ; last analog reading, so MREAD can
-PLASTY:  .byte  128
-MAXIS:   .byte  0                       ; which paddle MREAD reads next
-PSETTLE: .byte  0                       ; which paddle MREAD reads next                     ; tell a real movement from an idle one
-
-RBUF:    .word  0                       ; sector buffer address for RWTS
 
 INBUFSZ = 32                            ; a DOS 3.3 name is 30 characters
 INBUF:   .res   INBUFSZ                 ; ASKLN's private copy of a typed line

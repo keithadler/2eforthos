@@ -31,7 +31,7 @@ INCS    := $(wildcard src/*.inc)
 DISKFILES := $(wildcard disk/*)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
-GENERATED := build/font.inc build/bootsrc.inc build/icons.inc
+GENERATED := build/font.inc build/bootsrc.inc
 BOOT1   := build/boot1.bin
 OBJS    := $(patsubst $(SRCDIR)/%.s,build/%.o,$(SRCS))
 BIN     := build/$(PROG).bin
@@ -87,9 +87,6 @@ build/font.inc: roms/apple2p/341-0036.chr tools/mkfont.py | build
 build/bootsrc.inc: src/system.fth tools/mkboot.py | build
 	@python3 tools/mkboot.py $< $@
 
-build/icons.inc: src/icons.txt tools/mkicons.py | build
-	@python3 tools/mkicons.py $< $@
-
 roms/apple2p/341-0036.chr:
 	@echo "Apple ROMs are not present.  Run: make roms" >&2; exit 1
 
@@ -140,12 +137,12 @@ gui: $(DSK) monitor
 	  mame $(MAME_COMMON) -flop1 $(DSK) \
 	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
 
-# Drive the desktop and check the OS's own variables afterwards.  Each test
-# is a separate boot, so the whole suite takes a few minutes.
+# Type Forth at the console and check machine state afterwards.  Each test is
+# a separate boot, so the whole suite takes a few minutes.
 #   make test              everything
-#   make test T="drag"     named tests
+#   make test T="arith"    named tests
 test: $(DSK) monitor
-	python3 tools/uitest.py $(T)
+	python3 tools/contest.py $(T)
 
 poke:
 	./run.sh $(SRCDIR)/$(PROG).s
