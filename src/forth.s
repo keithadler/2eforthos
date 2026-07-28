@@ -37,6 +37,20 @@ ColdStart:
         lda     #>BANNER
         sta     TMP2+1
         jsr     PutStr
+        ; DOS hooks the monitor's character vectors, so every COUT call runs
+        ; through its code at $9600.  Point them back at the ROM: that frees
+        ; everything from $9600 up to RWTS for the dictionary, which is the
+        ; difference between 528 bytes of headroom and about eight kilobytes.
+        ; RWTS itself lives above $B600 and is left alone -- the catalog still
+        ; needs it.
+        lda     #<COUT1
+        sta     CSW
+        lda     #>COUT1
+        sta     CSW+1
+        lda     #<KEYIN
+        sta     KSW
+        lda     #>KEYIN
+        sta     KSW+1
         jsr     BuildIndex              ; hash the built-in dictionary
         jsr     D2BuildTable            ; invert the 6-and-2 nibble table
         lda     #<BOOTSRC               ; the interpreter reads this first,
@@ -55,6 +69,7 @@ ColdStart:
 .include "hires.inc"
 .include "text.inc"
 .include "gfx.inc"
+.include "icon.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
