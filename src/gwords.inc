@@ -28,6 +28,16 @@
         jsr     HgrColor
         NEXT
 
+        prim    "HXOR", W_HXOR, 0       ; flag --
+        lda     0,x                     ; any non-zero flag turns it on; the
+        ora     1,x                     ; driver tests bit 7
+        beq     @off
+        lda     #$80
+@off:   sta     HXORF
+        inx
+        inx
+        NEXT
+
         prim    "HPLOT", W_HPLOT, 0     ; x y --
         lda     0,x
         sta     HY

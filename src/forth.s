@@ -106,6 +106,11 @@ CFLO:    .byte  0
 CFHI:    .byte  0
 NUMBUF:  .res   8                       ; digits, emitted in reverse
 
+; $80 makes the drawing words XOR what they draw instead of replacing it, so
+; the same call both draws and erases.  Dragging a window needs an outline
+; that appears and disappears without a repaint underneath it.
+HXORF:   .byte  0
+
 PX:      .word  140                     ; pointer position
 PY:      .byte  80
 PVIS:    .byte  0                       ; is the arrow currently XORed in?

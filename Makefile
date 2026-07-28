@@ -60,7 +60,7 @@ MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
                -cfg_directory $(CURDIR)/cfg -mouse \
                -resolution $(shell echo $$((560*$(SCALE))))x$(shell echo $$((384*$(SCALE))))
 
-.PHONY: all roms disk run gui poke monitor clean
+.PHONY: all roms disk run gui poke monitor test clean
 
 # MAME's per-machine config: the B&W monitor, and the mouse button bound to
 # the game port's button 1.  MAME maps the mouse to the analog axes by default
@@ -139,6 +139,13 @@ gui: $(DSK) monitor
 	BOOTSPEED=$(SPEED) BOOTFRAMES=$(BOOTFRAMES) \
 	  mame $(MAME_COMMON) -flop1 $(DSK) \
 	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
+
+# Drive the desktop and check the OS's own variables afterwards.  Each test
+# is a separate boot, so the whole suite takes a few minutes.
+#   make test              everything
+#   make test T="drag"     named tests
+test: $(DSK) monitor
+	python3 tools/uitest.py $(T)
 
 poke:
 	./run.sh $(SRCDIR)/$(PROG).s
