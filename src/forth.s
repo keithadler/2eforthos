@@ -38,10 +38,9 @@ ColdStart:
         sta     TMP2+1
         jsr     PutStr
         ; DOS hooks the monitor's character vectors, so every COUT call runs
-        ; through its code at $9600.  Point them back at the ROM: from here
-        ; the dictionary can grow over DOS's command interpreter and file
-        ; manager, which we never call.  RWTS lives above $B600 and survives,
-        ; which matters until our own writer replaces it.
+        ; through its code at $9600.  Nothing hooks them now -- DOS is not on
+        ; the disk at all -- but setting them explicitly costs four stores and
+        ; means the kernel does not depend on what happened to be there.
         lda     #<COUT1
         sta     CSW
         lda     #>COUT1
@@ -68,6 +67,7 @@ ColdStart:
 .include "hires.inc"
 .include "text.inc"
 .include "gfx.inc"
+.include "icon.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
