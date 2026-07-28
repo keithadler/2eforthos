@@ -24,6 +24,14 @@
 ; constraint entirely.
 ; ---------------------------------------------------------------------------
 
+; The nibble buffers live at fixed page-aligned addresses rather than in the
+; DATA segment.  LDA abs,Y costs five cycles instead of four when the index
+; carries into the next page, and the write loop has a 32-cycle budget with
+; nothing to spare -- an unaligned 256-byte buffer makes roughly half the
+; iterations a cycle late, which corrupts the sector being written.
+D2NIBM  = $0B00                 ; 256 primary nibbles
+D2NIBA  = $0C00                 ; 86 auxiliary nibbles
+
 D2BASE  = $C0E0                 ; slot 6
 D2PH0OFF = D2BASE+0
 D2PH0ON  = D2BASE+1
@@ -33,6 +41,7 @@ D2DRV1   = D2BASE+10
 D2Q6L    = D2BASE+12            ; read a disk byte here
 D2Q6H    = D2BASE+13
 D2Q7L    = D2BASE+14            ; read mode
+D2Q7H    = D2BASE+15            ; write mode
 
 ; ---------------------------------------------------------------------------
 ; Motor control.  The drive needs about a second to come up to speed from
@@ -409,6 +418,303 @@ D2SWAP2:
         .byte   0, 2, 1, 3
 
 ; ---------------------------------------------------------------------------
+; Writing
+;
+; The reverse of reading, with one asymmetry that matters: a byte must be
+; handed to the latch every 32 cycles exactly, and unlike reading there is no
+; way to buffer your way out of it -- the shift register will emit something
+; whether or not you supplied it.  So the 256 bytes are encoded into the 343
+; disk bytes first, with no clock running, and the write loops then do nothing
+; but stream them, padded to 32 cycles apiece.
+; ---------------------------------------------------------------------------
+
+; D2Nibblize -- the 256 bytes at D2PTR into 6-bit values in D2NIBA/D2NIBM.
+; Each auxiliary byte carries the low two bits of three data bytes, each pair
+; reversed, which is the same packing the read side undoes.
+D2Nibblize:
+        ldy     #0
+@main:  lda     (D2PTR),y               ; high six bits
+        lsr     a
+        lsr     a
+        sta     D2NIBM,y
+        iny
+        bne     @main
+
+        lda     #0
+        sta     D2IDX
+@aux:   ldy     D2IDX
+        lda     (D2PTR),y
+        and     #$03
+        tax
+        lda     D2SWAP2,x
+        sta     D2TMP
+        lda     D2IDX
+        clc
+        adc     #86
+        tay
+        lda     (D2PTR),y
+        and     #$03
+        tax
+        lda     D2SWAP2,x
+        asl     a
+        asl     a
+        ora     D2TMP
+        sta     D2TMP
+        lda     D2IDX                   ; the last two slots have no third
+        cmp     #84                     ; byte: 172+84 is already 256
+        bcs     @put
+        clc
+        adc     #172
+        tay
+        lda     (D2PTR),y
+        and     #$03
+        tax
+        lda     D2SWAP2,x
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        ora     D2TMP
+        sta     D2TMP
+@put:   ldy     D2IDX
+        lda     D2TMP
+        sta     D2NIBA,y
+        inc     D2IDX
+        lda     D2IDX
+        cmp     #86
+        bcc     @aux
+        rts
+
+; D2Encode -- 6-bit values to disk bytes, in place.  Each is exclusive-ored
+; with the one before so a single bad byte fails the checksum at the end
+; rather than passing as good data.
+D2Encode:
+        lda     #0
+        sta     D2CHK
+        ldy     #0
+@e1:    lda     D2NIBA,y
+        sta     D2TMP
+        eor     D2CHK
+        tax
+        lda     D2NIBENC,x
+        sta     D2NIBA,y
+        lda     D2TMP
+        sta     D2CHK
+        iny
+        cpy     #86
+        bcc     @e1
+        ldy     #0
+@e2:    lda     D2NIBM,y
+        sta     D2TMP
+        eor     D2CHK
+        tax
+        lda     D2NIBENC,x
+        sta     D2NIBM,y
+        lda     D2TMP
+        sta     D2CHK
+        iny
+        bne     @e2
+        ldx     D2CHK
+        lda     D2NIBENC,x
+        sta     D2NIBC
+        rts
+
+; ---------------------------------------------------------------------------
+; D2WriteSector -- D2TRK/D2SEC written from the 256 bytes at D2PTR.
+; Returns A = 0 ok, 1 sector not found, 3 write protected.
+;
+; Cycle counts are in the margin.  The interval that matters is between one
+; STA to the latch and the next: the shift register wants a byte every 32,
+; and self-sync bytes are written at 40 so they carry the extra zero bits
+; that let a reader find byte boundaries again.
+; ---------------------------------------------------------------------------
+D2WriteSector:
+        jsr     D2Nibblize              ; no clock running yet
+        jsr     D2Encode
+        jsr     D2MotorOn
+        lda     D2READY
+        bne     :+
+        jsr     D2Recal
+        lda     #1
+        sta     D2READY
+:       jsr     D2Seek
+        lda     D2Q7L                   ; read mode while we look
+        lda     D2Q6L
+        lda     #<32000
+        sta     D2BUDGET
+        lda     #>32000
+        sta     D2BUDGET+1
+
+@find:                                  ; the same search the read path uses
+@f1:    lda     D2Q6L
+        bpl     @f1
+        cmp     #$D5
+        bne     @spent
+@f2:    lda     D2Q6L
+        bpl     @f2
+        cmp     #$AA
+        bne     @spent
+@f3:    lda     D2Q6L
+        bpl     @f3
+        cmp     #$96
+        bne     @spent
+        jsr     D2Read44                ; volume
+        jsr     D2Read44
+        sta     D2GOTTRK
+        jsr     D2Read44
+        cmp     #16
+        bcs     @spent
+        pha
+        lda     D2GOTTRK
+        cmp     #35
+        bcs     @nope
+        pla
+        cmp     D2SEC
+        bne     @spent
+        lda     D2GOTTRK
+        cmp     D2TRK
+        beq     @found
+        asl     a                       ; head is not where we thought
+        sta     D2CURH
+        jmp     D2WriteSector
+@nope:  pla
+@spent: lda     D2BUDGET
+        bne     :+
+        dec     D2BUDGET+1
+:       dec     D2BUDGET
+        lda     D2BUDGET
+        ora     D2BUDGET+1
+        bne     @find
+        lda     #1
+        rts
+
+@found: jsr     D2Read44                ; the address checksum
+        ldy     #3                      ; and its epilogue, DE AA EB
+@epi:   lda     D2Q6L
+        bpl     @epi
+        dey
+        bne     @epi
+
+        lda     D2Q6H                   ; is the disk write protected?
+        lda     D2Q7L
+        bpl     :+
+        jmp     @protected
+:
+        lda     #$FF                    ; into write mode, latching a sync byte
+        sta     D2Q7H
+        ora     D2Q6L
+
+        ldy     #5                      ; five self-sync bytes, 40 cycles each
+@sync:  lda     #$FF                    ; 2
+        sta     D2Q6H                   ; 4
+        ora     D2Q6L                   ; 4
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        bit     $00                     ; 3
+        dey                             ; 2
+        bne     @sync                   ; 3   = 40
+
+        lda     #$D5                    ; data field prologue
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$AA
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$AD
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 9
+        nop
+        .endrep
+        ldy     #0                      ; 2
+
+@waux:  lda     D2NIBA,y                ; 4
+        sta     D2Q6H                   ; 4
+        ora     D2Q6L                   ; 4
+        iny                             ; 2
+        cpy     #86                     ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        bit     $00                     ; 3
+        bcc     @waux                   ; 3   = 32
+
+        ldy     #0                      ; 2
+        nop                             ; 2
+        nop                             ; 2
+        ; BIT is the only 3-cycle filler to hand, and it clobbers Z -- so the
+        ; increment goes after it, not before, or BNE tests BIT's result
+        ; instead of the loop counter.
+@wmain: lda     D2NIBM,y                ; 4
+        sta     D2Q6H                   ; 4
+        ora     D2Q6L                   ; 4
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        nop                             ; 2
+        bit     $00                     ; 3
+        iny                             ; 2
+        bne     @wmain                  ; 3   = 32
+
+        lda     D2NIBC                  ; the trailing checksum
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$DE                    ; epilogue
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$AA
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$EB
+        sta     D2Q6H
+        ora     D2Q6L
+        .repeat 11
+        nop
+        .endrep
+        lda     #$FF
+        sta     D2Q6H
+        ora     D2Q6L
+
+        lda     D2Q6L                   ; back to reading
+        lda     D2Q7L
+        lda     #0
+        rts
+
+@protected:
+        lda     D2Q6L
+        lda     D2Q7L
+        lda     #3
+        rts
+
+; ---------------------------------------------------------------------------
 ; The decode table is the inverse of the 64 legal disk bytes, built once at
 ; cold start rather than stored: it is 256 bytes either way, and this way the
 ; only thing in the image is the 64-byte forward table.
@@ -619,6 +925,27 @@ D2NIBENC:
         sta     1,x
         NEXT
 
+        prim    "DWRITE", W_DWRITE, 0   ; track sector addr -- err
+        lda     0,x
+        sta     D2PTR
+        lda     1,x
+        sta     D2PTR+1
+        lda     2,x
+        sta     D2SEC
+        lda     4,x
+        sta     D2TRK
+        inx
+        inx
+        inx
+        inx
+        stx     XSAV
+        jsr     D2WriteSector
+        ldx     XSAV
+        sta     0,x
+        lda     #0
+        sta     1,x
+        NEXT
+
         prim    "DREAD", W_DREAD, 0     ; track sector addr -- err
         lda     0,x
         sta     D2PTR
@@ -659,7 +986,5 @@ D2TMP:   .byte  0
 D2IDX:   .byte  0
 D2VOL:   .byte  0
 D2NIBC:  .byte  0                       ; the trailing checksum byte
-D2NIBA:  .res   86                      ; auxiliary nibbles, decoded in place
-D2NIBM:  .res   256                     ; primary nibbles, decoded in place
 D2NIBDEC:.res   256                     ; built at cold start from D2NIBENC
         .segment "CODE"
