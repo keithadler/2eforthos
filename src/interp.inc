@@ -28,8 +28,33 @@ LATESTV:        .word FINAL_LATEST
 ; Dictionary construction helpers
 ; ---------------------------------------------------------------------------
 
+; Abort if the dictionary has run out of room.
+;
+; Nothing used to check.  $C000-$CFFF is the only range that must never be
+; written -- everything below is main memory and everything above is the
+; language card -- and writing there is not a crash.  It throws soft
+; switches: it banks the card out from under the dictionary, flips the
+; display, selects a drive.  The machine ends up somewhere that cannot be
+; reasoned about from inside it, which is the one failure a system should
+; not have.
+CheckDP:
+        lda     DPV+1
+        cmp     #$C0
+        bcc     @ok
+        cmp     #$D0
+        bcs     @ok
+        lda     #<DICTFULL
+        sta     TMP2
+        lda     #>DICTFULL
+        sta     TMP2+1
+        jsr     PutStr
+        ldx     #DSTACK_TOP
+        jmp     Quit
+@ok:    rts
+
 ; Append the cell in TMP2 at DP.
 Comma:
+        jsr     CheckDP
         lda     DPV
         sta     UTMP
         lda     DPV+1
@@ -52,6 +77,8 @@ Comma:
 ; Append the byte in A at DP.
 CComma:
         sta     UTMP2
+        jsr     CheckDP
+        lda     UTMP2
         lda     DPV
         sta     UTMP
         lda     DPV+1
@@ -683,6 +710,7 @@ STKSTR: .byte   " STACK?", $0D, $00
         NEXT
 
         prim    "ALLOT", W_ALLOT, 0
+        jsr     CheckDP
         clc
         lda     DPV
         adc     0,x

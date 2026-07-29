@@ -15,18 +15,6 @@
 \ ===========================================================================
 
 \ --- words the kernel leaves to Forth --------------------------------------
-: 2DUP OVER OVER ;
-: 2DROP DROP DROP ;
-: > SWAP < ;
-: <> = 0= ;
-: 0<> 0= 0= ;
-: 0> 0 SWAP < ;
-: U> SWAP U< ;
-: ABS DUP 0< IF NEGATE THEN ;
-: MIN 2DUP > IF SWAP THEN DROP ;
-: MAX 2DUP < IF SWAP THEN DROP ;
-: -ROT ROT ROT ;
-: TUCK SWAP OVER ;
 : 2SWAP 3 ROLL 3 ROLL ;
 : 2OVER 3 PICK 3 PICK ;
 : SPACE 32 EMIT ;
@@ -45,6 +33,25 @@
 : ERASE 0 FILL ;
 : BLANK 32 FILL ;
 : WITHIN OVER - >R - R> U< ;
+
+\ A scratch buffer, at the standard name.  $0D00-$0FFF is the only RAM the
+\ system leaves alone once it has booted.
+$0F00 CONSTANT PAD
+
+\ --- catching a failure ----------------------------------------------------
+\ Without these, any error takes the whole line down and clears the stack: a
+\ word cannot try something and recover.  CATCH remembers where both stacks
+\ were and hands that to THROW, which puts them back and returns through
+\ CATCH rather than through whatever was in the middle.
+VARIABLE HANDLER
+: CATCH ( xt -- 0 | n )
+  SP@ >R  HANDLER @ >R  RP@ HANDLER !
+  EXECUTE
+  R> HANDLER !  R> DROP  0 ;
+: THROW ( n -- )
+  ?DUP IF
+    HANDLER @ RP!  R> HANDLER !  R> SWAP >R  SP! DROP  R>
+  THEN ;
 
 \ --- signed and mixed precision --------------------------------------------
 \ UM* and UM/MOD are unsigned and in the kernel; everything signed is those
