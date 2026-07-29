@@ -39,6 +39,49 @@ VARIABLE ELX VARIABLE ELY VARIABLE ELA VARIABLE ELB
     ELY @ I - HLINE
   LOOP ;
 
+\ --- arcs ------------------------------------------------------------------
+\ Wanted a sine table until FSIN and FCOS turned up; now it is the parametric
+\ form written out.  Pi is four times the arctangent of one, which is exact
+\ rather than a constant somebody typed in.
+\
+\ Four degrees a step: at sixty pixels' radius that is about four pixels
+\ between points, which draws as a line rather than a dotted one.
+VARIABLE ACX VARIABLE ACY VARIABLE ACR
+VARIABLE AD1 VARIABLE AD2
+: FPI ( -- )  1 S>F FATN 4 S>F F* ;
+: DEG>RAD ( -- )  FPI F* 180 S>F F/ ;
+\ F>S truncates, and the transcendentals do not land on whole numbers:
+\ Applesoft's COS(0) is 0.99999, so sixty times it is 59 and every arc comes
+\ out a pixel small.  Adding a half first is the difference between a circle
+\ and a circle that is wrong everywhere the maths was right.
+: F>S+ ( -- n )  1 S>F 2 S>F F/ F+ F>S ;
+: ARCPT ( deg -- x y )
+  S>F DEG>RAD
+  FDUP FCOS ACR @ S>F F* F>S+
+  FSIN ACR @ S>F F* F>S+
+  SWAP ACX @ + SWAP ACY @ + ;
+\ Plotting the points leaves a dotted line -- four degrees at seventy pixels
+\ is five pixels between them -- so each step draws to the one before it and
+\ the arc comes out solid.  A polygon of ninety sides is a circle at this
+\ resolution.
+VARIABLE ANX VARIABLE ANY VARIABLE APX VARIABLE APY VARIABLE AFIRST
+: ARCSTEP ( deg -- )
+  ARCPT ANY ! ANX !
+  AFIRST @ IF 0 AFIRST ! ELSE APX @ APY @ ANX @ ANY @ HLINE2 THEN
+  ANX @ APX !  ANY @ APY ! ;
+: HARC ( x y r d1 d2 -- )
+  AD2 ! AD1 ! ACR ! ACY ! ACX !  -1 AFIRST !
+  AD2 @ 1+ AD1 @ ?DO I ARCSTEP 4 +LOOP
+  AD2 @ ARCSTEP ;                 \ the step rarely lands on the end
+
+VARIABLE PPX VARIABLE PPY
+: PIERAD ( deg -- )
+  ARCPT PPY ! PPX !
+  ACX @ ACY @ PPX @ PPY @ HLINE2 ;
+: HPIE ( x y r d1 d2 -- )         \ the arc and both radii, for a chart
+  2DUP 2>R HARC
+  2R> SWAP PIERAD PIERAD ;
+
 \ --- saving what is under a sprite -----------------------------------------
 \ A byte a pixel: wasteful, but a sprite-sized block is a few hundred bytes
 \ and the alternative is packing and unpacking bits for no gain.

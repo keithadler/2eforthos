@@ -261,6 +261,12 @@ compiler already had.
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
 
+**Arcs and pie slices.** `HARC` and `HPIE` in `GFXLIB.FTH`, written the
+parametric way now that `FSIN` and `FCOS` exist — pi is four times the
+arctangent of one, which is exact rather than a constant somebody typed in.
+
+![arcs and pie slices](images/ex-arc.png)
+
 **Looking at things.** `SEE` decompiles a word back to something you can read,
 and prints inline literals as numbers rather than mistaking them for whatever
 word happens to live at that address. `DUMP` shows memory. `MARKER` makes a
