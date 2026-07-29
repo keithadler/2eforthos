@@ -406,6 +406,32 @@ the space back. With about 1.1K of dictionary free, it is one demo at a time.
 
 ![HELP on the machine](docs/images/console-help.png)
 
+## Precompiled overlays
+
+Compiling a library from source costs a dictionary search per token.  The
+same library saved as an image of the dictionary it produced loads at disk
+speed:
+
+```forth
+MARK                    \ before defining anything
+: FOO ... ;  : BAR ... ;
+SAVEDICT                \ writes a binary file, asking for a name
+```
+
+and in a later session, before anything else is defined:
+
+```forth
+n LOADDICT              \ the words are simply there
+```
+
+Nothing is relocated, because the image goes back at the address it came
+from. That is the whole trick and also the whole limitation: a thread cell is
+an absolute address, so moving one word would mean patching every thread that
+names it. `LOADDICT` refuses the load rather than landing somewhere else, and
+the two cells `MARK` lays down are what it checks. `UNMARK` throws away
+everything since the mark, which is what makes the round trip testable in one
+session.
+
 ## Memory map
 
 | range | what |
@@ -537,6 +563,18 @@ Three things about the harness were worth more than they cost:
   is the only RAM the system leaves alone. Anything above `$4000` is kernel
   or dictionary and moves as the system grows, which is how a working test
   started failing.
+
+## Known issues
+
+- **`NFILE` over-counts by one after writing a file to a catalog that spans
+  four or more sectors.** The catalog on disk is correct — 23 entries where
+  `CATLOAD` reports 24 — so the fault is in reading it back, not in `SAVE`.
+  It matters because `LOAD` takes the number `CAT` printed. Bounded but not
+  found; the tests work around it by looking files up by name.
+- **Nothing checks for dictionary overflow.** If `HERE` runs past `$BFFF` it
+  walks into the I/O page, and writing there throws soft switches.
+- **`tools/dumptext.lua` shows only odd columns.** The console keeps even
+  columns in auxiliary memory and the script reads main.
 
 ## Debugging
 
