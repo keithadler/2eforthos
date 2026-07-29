@@ -79,8 +79,8 @@ Forth source (see *Boot cost* below).
 | `disk/*.FTH` | the demos, put on the floppy by `make disk` |
 | `docs/LANGUAGE.md` | every word, with stack effects |
 | `docs/DEMOS.md` | the demo gallery |
-| `test/hirestest.s` | drives the graphics driver from plain assembly |
-| `examples/hello.s` | the original 31-byte hello world |
+| `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
+| `examples/hello.s` | the original 31-byte hello world, from before any of this |
 | `tools/contest.py` | the console test suite — types Forth, checks machine state |
 | `tools/contest.lua` | the MAME side of it |
 | `tools/dumptext.lua` | dumps the text screen, zero page, and dictionary state |
@@ -366,6 +366,23 @@ what makes that possible.
 A track byte of zero means an unused slot in a track/sector list, which is
 unambiguous because track 0 holds the boot loader and is never allocated to a
 file.
+
+## Example programs
+
+Three kinds, in increasing order of how much of the system they need:
+
+| | |
+|---|---|
+| `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
+| `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
+| `disk/*.FTH` | six Forth programs on the floppy, below. |
+
+Both assembly ones still build:
+
+```bash
+ca65 -I src -I build examples/hello.s -o /tmp/h.o
+ca65 -I src -I build test/hirestest.s -o /tmp/ht.o
+```
 
 ## The demos on the disk
 

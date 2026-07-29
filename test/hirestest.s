@@ -100,4 +100,9 @@ start:
         .segment "DATA"
 ctr:    .byte   0
 
+; The driver reads this to decide whether to draw by XOR.  In the real system
+; it lives in forth.s alongside the rest of the kernel's variables; a test
+; that includes the driver on its own has to supply it.
+HXORF:  .byte   0
+
 .include "hires.inc"
