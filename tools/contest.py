@@ -1408,6 +1408,75 @@ TESTS = {
     depth 0
 """,
 
+# Floating point by calling Applesoft's, which is several kilobytes of
+# debugged code sitting in the ROM.  The machine has to bank the ROM back in
+# around every call, because the language card holds the dictionary.
+"float": """
+    type 144 S>F FSQRT F>S
+    stack 12
+    clear
+    type FDEPTH
+    stack 0
+    clear
+    type 3 S>F 4 S>F F+ F>S
+    stack 7
+    clear
+    type 6 S>F 7 S>F F* F>S
+    stack 42
+    clear
+    type 100 S>F 4 S>F F/ F>S
+    stack 25
+    clear
+    type 10 S>F 3 S>F F- F>S
+    stack 7
+    clear
+    type 2 S>F FSQRT 2 S>F FSQRT F* F>S
+    stack 2
+    clear
+    type FDEPTH
+    stack 0
+""",
+
+# The whole point of the exercise: transcendentals nobody had to write.
+"float-transcendental": """
+    type 0 S>F FCOS 1000 S>F F* F>S
+    stack 999
+    clear
+    type 0 S>F FSIN F>S
+    stack 0
+    clear
+    type 1 S>F FEXP 1000 S>F F* F>S
+    stack 2718
+    clear
+    type 1 S>F FATN 4000 S>F F* F>S
+    stack 3141
+    clear
+    type 20 S>F FLN 1000 S>F F* F>S
+    stack 2995
+    clear
+    type FDEPTH
+    stack 0
+""",
+
+# And that the interpreter is unharmed by all the banking and zero page
+# saving that goes on underneath.
+"float-safety": """
+    type 1 2 3 144 S>F FSQRT F>S
+    stack 12 3 2 1
+    clear
+    type : SQ DUP * ; 12 SQ
+    stack 144
+    clear
+    type 7 S>F F.
+    depth 0
+    clear
+    type 22 S>F 7 S>F F/ F.
+    depth 0
+    clear
+    type -10 3 /MOD
+    stack -4 2
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0

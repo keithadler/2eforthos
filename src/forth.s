@@ -91,6 +91,7 @@ ColdStart:
 .include "math.inc"
 .include "compile.inc"
 .include "fast.inc"
+.include "fp.inc"
 .include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
