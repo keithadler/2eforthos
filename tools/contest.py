@@ -1179,6 +1179,15 @@ TESTS = {
     files 0
 """,
 
+"shot-moire": """
+    load MOIRE.FTH
+    wait 2400
+    clear
+    type MOIRE
+    wait 4800
+    shot
+""",
+
 "shot-float": """
     load FLOAT.FTH
     wait 2400
@@ -1927,6 +1936,11 @@ def run(name, script, keep_shots=False):
         # a window stealing focus every forty seconds makes the machine
         # unusable while a suite runs.
         "-video", "none", "-sound", "none",
+        # SNAPSIZE=1680x1152 for captures meant to be looked at rather than
+        # asserted on; the native 560x384 goes soft the moment anything
+        # scales it up.
+        *(["-snapsize", os.environ["SNAPSIZE"], "-snapview", "internal"]
+          if os.environ.get("SNAPSIZE") else []),
         "-nothrottle", "-seconds_to_run", "300", "-autoboot_delay", "0",
         "-autoboot_script", str(ROOT / "tools" / "contest.lua"),
         "-snapshot_directory", str(shots),
