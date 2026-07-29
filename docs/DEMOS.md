@@ -261,6 +261,13 @@ compiler already had.
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
 
+**Looking at things.** `SEE` decompiles a word back to something you can read,
+and prints inline literals as numbers rather than mistaking them for whatever
+word happens to live at that address. `DUMP` shows memory. `MARKER` makes a
+word that forgets everything defined after it, itself included.
+
+![SEE and DUMP](images/ex-inspect.png)
+
 Every one of them, on the machine:
 
 **`STACK.FTH`** — `ALL` shows what each stack word does to `1 2 3`, printed by
