@@ -60,7 +60,7 @@ MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
                -cfg_directory $(CURDIR)/cfg -mouse \
                -resolution $(shell echo $$((560*$(SCALE))))x$(shell echo $$((384*$(SCALE))))
 
-.PHONY: all roms disk run gui poke monitor test clean
+.PHONY: all roms disk dist run gui poke monitor test clean
 
 # MAME's per-machine config: the B&W monitor, and the mouse button bound to
 # the game port's button 1.  MAME maps the mouse to the analog axes by default
@@ -144,6 +144,14 @@ gui: $(DSK) monitor
 # a separate boot, so the whole suite takes a few minutes.
 #   make test              everything
 #   make test T="arith"    named tests
+# The shipped image.  build/ is scratch and is rebuilt constantly; this is
+# the copy that is committed, refreshed deliberately rather than by every
+# build, so it changes only when someone means it to.
+dist: $(DSK)
+	@mkdir -p dist
+	@cp $(DSK) dist/2eforthos.dsk
+	@echo "dist/2eforthos.dsk: $$(wc -c < dist/2eforthos.dsk) bytes"
+
 test: $(DSK) monitor
 	python3 tools/contest.py $(T)
 

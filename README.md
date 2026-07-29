@@ -646,6 +646,22 @@ Reading characters off a screenshot is guesswork, and worse here than usual:
 the console keeps its even columns in auxiliary memory, so anything reading
 `$0400-$07FF` from main sees every other character.
 
+## The built disk
+
+`dist/2eforthos.dsk` is a bootable 140K DOS-order image, committed so the
+system can be run without a toolchain: point any Apple //e emulator at it, or
+write it to a real floppy with ADTPro. It boots to the Forth prompt in about
+thirty seconds.
+
+It is refreshed by `make dist` rather than by every build, so it changes when
+someone means it to and not on every `make`. `build/` stays scratch and stays
+ignored.
+
+```bash
+make dist                     # rebuild the shipped image from source
+mame apple2ee -flop1 dist/2eforthos.dsk    # or any //e emulator
+```
+
 ## Build system
 
 ```
