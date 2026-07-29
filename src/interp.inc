@@ -958,6 +958,7 @@ CommaPopped:
         lda     #<W_PDO
         ldy     #>W_PDO
         jsr     CommaWord
+        jsr     PushLVDepth             ; so LOOP knows which LEAVEs are ours
         jsr     PushHere
         NEXT
 
@@ -966,6 +967,7 @@ CommaPopped:
         ldy     #>W_PLOOP
         jsr     CommaWord
         jsr     CommaPopped
+        jsr     ResolveLeaves
         NEXT
 
 ; ." <text>"  -- compile an inline string

@@ -80,10 +80,17 @@ local function run(step)
         manager.machine.natkeyboard:post(rest .. "\n")
         posting = true
         timer = 5
+    elseif op == "clear" then
+        -- ABORT empties the data stack, so a test never inherits a depth
+        -- from the step before it.
+        manager.machine.natkeyboard:post("ABORT\n")
+        posting = true
+        timer = 5
     elseif op == "wait" then
         timer = tonumber(rest)
     elseif op == "shot" then
-        manager.machine.video:snapshot(); timer = 2
+        pcall(function() manager.machine.video:snapshot() end)
+        timer = 2
     elseif op == "stack" then
         local want = {}
         for v in rest:gmatch("%-?%d+") do want[#want+1] = tonumber(v) end
@@ -159,7 +166,7 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
     if posting then
         if manager.machine.natkeyboard.is_posting then return end
         posting = false
-        timer = 40                      -- and let the line run
+        timer = 60                      -- and let the line run
         return
     end
     if at > #steps then

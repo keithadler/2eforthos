@@ -58,6 +58,8 @@ ColdStart:
 .include "interp.inc"
 .include "gwords.inc"
 .include "input.inc"
+.include "math.inc"
+.include "compile.inc"
 .include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
@@ -105,7 +107,7 @@ NUMBUF:  .res   8                       ; digits, emitted in reverse
 ; as it was found.
 HXORF:   .byte  0
 
-INBUFSZ = 32                            ; a DOS 3.3 name is 30 characters
+INBUFSZ = 96                            ; a quoted string, or a typed name
 INBUF:   .res   INBUFSZ                 ; ASKLN's private copy of a typed line
 
 ; The two-cell thread DoRun executes: the word asked for, then the primitive
