@@ -64,6 +64,8 @@ ColdStart:
 .include "hires.inc"
 .include "text.inc"
 .include "gfx.inc"
+.include "fill.inc"
+.include "sound.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
@@ -107,8 +109,8 @@ NUMBUF:  .res   8                       ; digits, emitted in reverse
 ; as it was found.
 HXORF:   .byte  0
 
-INBUFSZ = 96                            ; a quoted string, or a typed name
-INBUF:   .res   INBUFSZ                 ; ASKLN's private copy of a typed line
+INBUF   = $1C60                          ; ASKLN's copy of a typed line, also
+                                         ; up above the catalog
 
 ; The two-cell thread DoRun executes: the word asked for, then the primitive
 ; that restores IP and returns to the assembly caller.

@@ -58,6 +58,8 @@ Forth source (see *Boot cost* below).
 | `src/input.inc` | keyboard and game port, as Forth words |
 | `src/math.inc` | 16x16 multiply, 32/16 divide, shifts, bulk memory |
 | `src/compile.inc` | DOES>, the rest of the loop set, strings, FORGET |
+| `src/fill.inc` | flood fill and bitmap drawing |
+| `src/sound.inc` | the speaker, and the two ways to tell the time |
 | `src/text.inc` | 40x24 text on the hi-res screen |
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
@@ -95,7 +97,7 @@ compiling. It reaches back into Forth through `DoRun`, a two-cell thread
 holding the word to run followed by a primitive that restores `IP` and
 `RTS`es to the assembly caller.
 
-259 words. `/` `MOD` `/MOD` `*/MOD` and `FM/MOD` are **floored** — the
+310 words. `/` `MOD` `/MOD` `*/MOD` and `FM/MOD` are **floored** — the
 quotient rounds toward negative infinity and the remainder takes the sign of
 the divisor, so `-10 3 /MOD` gives 2 and −4. `SM/REM` truncates toward zero
 instead, and is there when that is what you want.
@@ -136,11 +138,14 @@ output    . U. .R U.R ? .S <# # #S #> HOLD SIGN
 control2  CASE OF ENDOF ENDCASE ABORT
 system2   FORGET WORDS BYE
 graphics  HGR TEXT HCLS HCOLOR HXOR HPLOT HLINE HVLINE HLINE2 HBOX
-          HPOINT HCIRCLE HDISC HFRAME
+          HPOINT HCIRCLE HDISC HFRAME HFILL BLIT
 hires text TAT TEMIT TINV T."
 input     KEY? KEYC BTN PADDLE
+sound     CLICK TONE
+timing    MS VBL
 disk      DREAD DWRITE
-console   CAT LOCK DEL REN LOAD HELP
+console   CAT LOCK DEL REN LOAD SAVE BSAVE BLOAD HELP
+banks     AUXBANK MAINBANK
 files     CATLOAD FREE ASKLN
 ```
 
@@ -270,23 +275,57 @@ first one that reached a file's own data.
 `CAT` printed, and refuses an index outside the catalog rather than trusting
 it, because every one of them writes to the disk.
 
+## Flood fill and bitmaps
+
+`x y HFILL` fills by scanlines, not by pixels: the seed stack holds one entry
+per run rather than one per pixel, and each run is drawn with `HgrHLine`,
+which writes whole bytes in the middle. That is the only reason a large area
+finishes at all — the scanning either side of a run is still per-pixel, so
+filling something the size of the screen takes tens of seconds.
+
+What it fills is the connected region of pixels **matching the seed**, and it
+fills them with the opposite value. Defining it that way rather than "fill
+with `HCOLOR`" is what makes it terminate: a dithered pattern leaves some of
+the pixels it writes still matching the seed, and those seed the fill again
+for as long as you care to wait. Filling with black is the same word with the
+seed on a white region.
+
+`addr w h x y BLIT` draws a bitmap: rows of whole bytes, eight pixels each,
+bit 0 leftmost. A set bit plots in the current colour and a clear bit leaves
+the screen alone, so a shape is drawn without a mask. With `HXOR` on, drawing
+it twice puts the screen back.
+
+## Writing files
+
+`addr len SAVE` and `addr len BSAVE` ask for a name and create a DOS file:
+sectors marked used in the VTOC, a track/sector list naming them, the data,
+and a catalog entry pointing at the list. Nothing is written until all four
+are ready except the data sectors, which are harmless on their own — an
+interrupted save leaks sectors rather than corrupting the catalog. `BSAVE`
+writes DOS's four-byte header (load address, then length) and `n addr BLOAD`
+steps it back off and returns the length.
+
 ## Loading source from the disk
 
 `n LOAD` reads a text file off the floppy and interprets it, which is what
 makes anything typed at the console survivable — write it to a file, load it
 back.
 
-The text is read into the dictionary at `HERE` and then `ALLOT`ted, so the
-definitions the file makes are compiled *above* the text rather than over it.
-Setting the kernel's own source pointer is all it then takes: the outer
+Setting the kernel's own source pointer is all it takes: the outer
 interpreter already prefers that source to the keyboard and drops back to the
 keyboard at the first zero byte, which is exactly a file's end.
 
-The obvious buffer was hi-res page 1 — eight free kilobytes that nothing else
-wants. It is the wrong answer here. `80STORE` is set for the console, and with
-`80STORE` set `$2000-$3FFF` follows `PAGE2` — which the 80-column firmware
-toggles on every character it prints. The buffer would move out from under the
-interpreter mid-line.
+The text goes on **hi-res page 1**, which costs no dictionary at all — and
+that matters, because the definitions the file makes have to fit somewhere.
+Turning the graphics screen on while a file is still being read overwrites
+what is left of it.
+
+That buffer needs care. `80STORE` is set for the console, and with `80STORE`
+set `$2000-$3FFF` follows `PAGE2` — which the 80-column firmware toggles on
+every character it prints. `Refill` puts `PAGE2` back to main once per line
+before it reads; the firmware sets it again for itself the next time it
+prints. Without that the buffer moves out from under the interpreter
+mid-line, which is exactly what it looked like.
 
 One file at a time: a load inside a load would move the ground under the first.
 
@@ -321,8 +360,21 @@ file.
 | `$0800-$0FFF` | one raw disk sector |
 | `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
-| `$4000-$8EFA` | the kernel |
-| `$8EFB-$BEFF` | dictionary, growing upward — and where a loaded file's text goes |
+| `$1900-$1CBF` | fill seed stack and the two line buffers |
+| `$4000-$9E50` | the kernel |
+| `$9E51-$BFFF` | dictionary, growing upward |
+
+The kernel and the dictionary share one 32K region, so moving something from
+one to the other gains nothing — the only wins are code that is smaller or
+RAM that is somewhere else. The fill's seed stack and the two line buffers
+therefore live above the catalog: `CATBUF` is a page-aligned `$1000-$1FFF`
+but only sixty 36-byte records deep, so everything past `$186F` was going
+begging. That is worth about 950 bytes of dictionary.
+
+**A fresh boot leaves about 1.1K free.** That is enough to work in and not
+much more; the language is now large enough that it, rather than the kernel,
+is what fills the machine. The next real gain would have to come from the
+language card.
 
 Zero page: `$00-$4F` is left alone — the monitor's text window state and the
 80-column firmware's own variables live there, and the console calls both on
@@ -352,8 +404,8 @@ aimed at the wrong thing:
 
 Removing the windowing environment took the image from 23233 bytes to 15577
 and the boot from ~28 emulated seconds to ~18. Filling the language back out
-to 259 words put it at 20235 bytes and ~25 seconds — the extra time is
-compiling the Forth half of the new word set, not loading it.
+to 310 words put it at 24145 bytes and ~31 seconds — the extra time is
+compiling the Forth half of the word set, not loading it.
 
 `make gui SPEED=8` boots in about two seconds.
 
@@ -386,7 +438,15 @@ Three things about the harness were worth more than they cost:
   which frame it fell on.
 - **A step that touches the disk needs to be waited for.** Sampling the stack
   forty frames after a line was typed catches a word that seeks the head
-  half-finished, and a half-finished word looks exactly like a wrong one.
+  half-finished, and a half-finished word looks exactly like a wrong one. A
+  flood fill needs longer still.
+- **Reading a graphics address from the test harness only sees main memory.**
+  Even byte columns are in aux, so a check aimed at one reads zero however
+  well the drawing worked. Scan a wide range, or aim at an odd column.
+- **Scratch addresses in the tests must be below the kernel.** `$0D00-$0FFF`
+  is the only RAM the system leaves alone. Anything above `$4000` is kernel
+  or dictionary and moves as the system grows, which is how a working test
+  started failing.
 
 ## Debugging
 

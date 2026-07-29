@@ -241,22 +241,149 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
   FSEC SECBUF DWRITE DROP
   CATLOAD ;
 
+\ --- writing files --------------------------------------------------------
+\ Creating a DOS file is four things at once: sectors marked used in the
+\ VTOC, a track/sector list naming them, the data itself, and a catalog entry
+\ pointing at the list.  Nothing is written until all four are ready except
+\ the data sectors, which are harmless on their own -- an interrupted save
+\ leaks sectors rather than corrupting the catalog.
+
+\ A set bit in the VTOC bitmap means free.  Four bytes per track: byte 0
+\ covers sectors 15-8 and byte 1 covers 7-0, which is why the byte to touch
+\ depends on which half the sector is in.
+VARIABLE QT VARIABLE QS VARIABLE QB
+: QADDR QT @ 4 * 56 + VTOCBUF + QS @ 8 < IF 1+ THEN QB ! ;
+: QBIT QS @ 8 < IF QS @ ELSE QS @ 8 - THEN 1<< ;
+: SFREE? QS ! QT ! QADDR QB @ C@ QBIT AND 0<> ;
+: STAKE QS ! QT ! QADDR QB @ DUP C@ QBIT INVERT AND SWAP C! ;
+
+\ Track 0 is the boot loader and 1 and 2 are the kernel; 17 is the catalog
+\ and is already marked used.  Searching from 3 keeps a new file off the
+\ tracks the machine needs to start at all, whatever the bitmap says.
+VARIABLE ALT VARIABLE ALS
+: ALLOC ( -- t s )
+  -1 ALT !
+  35 3 DO
+    ALT @ 0< IF
+      16 0 DO J I SFREE? IF J ALT ! I ALS ! LEAVE THEN LOOP
+    THEN
+  LOOP
+  ALT @ 0< IF -1 -1 EXIT THEN
+  ALT @ ALS @ 2DUP STAKE ;
+
+\ The track/sector list: bytes 1 and 2 point at the next list sector, and
+\ from byte 12 on it is pairs of track and sector, 122 of them.
+VARIABLE TT VARIABLE TS VARIABLE TN VARIABLE WCNT
+VARIABLE FTT VARIABLE FTS
+: TSCLR TSBUF 256 0 FILL 0 TN ! ;
+: TSFLUSH TT @ TS @ TSBUF DWRITE DROP ;
+: TSPUT ( t s -- ) TSBUF 12 + TN @ 2* + TUCK 1+ C! C! 1 TN +! ;
+: NEWTS ALLOC
+  TT @ 0< 0= IF
+    2DUP TSBUF 2 + C! TSBUF 1+ C!
+    TSFLUSH THEN
+  TSCLR
+  TS ! TT !
+  1 WCNT +! ;
+
+\ A binary file carries DOS's four-byte header -- load address then length --
+\ so the first sector is that plus 252 bytes of data and the rest are plain.
+CREATE WHDR 4 ALLOT
+CREATE WNAME 30 ALLOT
+VARIABLE WA VARIABLE WL VARIABLE WLT VARIABLE WI
+VARIABLE WT VARIABLE WHDRN VARIABLE WNL VARIABLE WNA
+: WFILL
+  SECBUF 256 0 FILL
+  WI @ 0= WHDRN @ 0<> AND IF
+    WHDR SECBUF WHDRN @ MOVE
+    WA @ SECBUF WHDRN @ + 256 WHDRN @ - WL @ MIN MOVE
+  ELSE
+    WA @ WI @ + WHDRN @ - SECBUF WLT @ WI @ - 256 MIN MOVE
+  THEN ;
+: WDATA
+  0 WI !
+  BEGIN WI @ WLT @ < WHILE
+    TN @ 122 = IF NEWTS THEN
+    ALLOC OVER 0< IF 2DROP EXIT THEN
+    2DUP TSPUT
+    WFILL
+    SECBUF DWRITE DROP
+    1 WCNT +!
+    256 WI +!
+  REPEAT ;
+
+\ A catalog entry is free when its first byte is zero (never used) or $FF
+\ (deleted).  The sector it lives in stays in SECBUF so the entry can be
+\ filled in and written straight back.
+VARIABLE CATE VARIABLE FT2 VARIABLE FS2
+: FINDENT
+  0 CATE !
+  17 0 SECBUF DREAD DROP
+  SECBUF 1+ C@ CTRK ! SECBUF 2 + C@ CSEC !
+  BEGIN CTRK @ WHILE
+    CTRK @ FT2 ! CSEC @ FS2 !
+    CTRK @ CSEC @ SECBUF DREAD DROP
+    7 0 DO
+      CATE @ 0= IF
+        SECBUF 11 + I 35 * +
+        DUP C@ 0= OVER C@ 255 = OR IF CATE ! ELSE DROP THEN
+      THEN LOOP
+    CATE @ IF 0 CTRK ! ELSE
+      SECBUF 1+ C@ SECBUF 2 + C@ CSEC ! CTRK ! THEN
+  REPEAT
+  CATE @ 0<> ;
+: PUTENT
+  FTT @ CATE @ C!  FTS @ CATE @ 1+ C!
+  WT @ CATE @ 2 + C!
+  30 0 DO 160 CATE @ 3 + I + C! LOOP
+  WNL @ 0 DO WNAME I + C@ 128 OR CATE @ 3 + I + C! LOOP
+  WCNT @ 255 AND CATE @ 33 + C!
+  WCNT @ 8 RSHIFT CATE @ 34 + C!
+  FT2 @ FS2 @ SECBUF DWRITE DROP ;
+
+: WRITEF ( addr len -- )
+  WL ! WA !
+  WL @ WHDRN @ + WLT !
+  ." NAME? " ASKLN WNL ! WNA !
+  WNL @ 0= IF EXIT THEN
+  WNL @ 30 > IF 30 WNL ! THEN
+  WNA @ WNAME WNL @ MOVE
+  17 0 VTOCBUF DREAD DROP
+  0 WCNT ! -1 TT ! -1 TS !
+  NEWTS
+  TT @ 0< IF ." DISK FULL" CR EXIT THEN
+  TT @ FTT ! TS @ FTS !
+  WDATA
+  TSFLUSH
+  FINDENT 0= IF ." CATALOG FULL" CR EXIT THEN
+  PUTENT
+  17 0 VTOCBUF DWRITE DROP
+  CATLOAD FREE NFREE ! ;
+
+: SAVE ( addr len -- ) 0 WT ! 0 WHDRN ! WRITEF ;
+: BSAVE ( addr len -- ) 4 WT ! 4 WHDRN !
+  OVER WHDR ! DUP WHDR 2 + ! WRITEF ;
+
 \ --- loading source from the disk -----------------------------------------
-\ The text is read into the dictionary at HERE and then ALLOTted, so the
-\ definitions the file makes are compiled above the text rather than over it.
+\ The text goes on hi-res page 1: eight kilobytes that the dictionary cannot
+\ reach and that nothing else wants while source is being read.  Reading a
+\ file therefore costs no dictionary at all, which matters -- the definitions
+\ the file makes have to fit somewhere.  Turning the graphics screen on while
+\ a file is still being read would overwrite what is left of it.
+\
 \ SRC is the kernel's own source pointer: the outer interpreter already reads
 \ lines from there in preference to the keyboard and drops back to the
 \ keyboard at the first zero byte, which is exactly what loading a file needs.
 \ One file at a time -- a load inside a load would move the ground under the
 \ first one.
-$CE CONSTANT 'SRC  $BE00 CONSTANT LDTOP
+$CE CONSTANT 'SRC  $2000 CONSTANT LDBUF  $4000 CONSTANT LDTOP
 VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
 : LSECS ( t s -- ) LS ! LT !
   BEGIN LT @ WHILE
     LT @ LS @ TSBUF DREAD DROP
     122 0 DO TSBUF 12 + I 2* +
       DUP C@ 0= IF DROP ELSE
-        LP @ LDTOP < IF
+        LP @ LDTOP U< IF        \ unsigned: these are addresses, not numbers
           DUP C@ SWAP 1+ C@ LP @ DREAD DROP  256 LP +!
         ELSE DROP THEN
       THEN LOOP
@@ -264,18 +391,30 @@ VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
   REPEAT
   0 LP @ C! ;
 
-\ DOS stores text with the high bit set, so every byte needs it taken off
-\ before the interpreter sees it.  The run ends at the first zero, which is
-\ how a DOS text file ends and where LSECS puts one anyway.
 : LNORM LBUF @ BEGIN DUP C@ ?DUP WHILE 127 AND OVER C! 1+ REPEAT DROP ;
 
 : LOAD ( n -- ) FPICK 0= IF EXIT THEN
   FSEC SECBUF DREAD DROP
-  HERE DUP LBUF ! LP !
+  LDBUF DUP LBUF ! LP !
   FENTRY DUP C@ SWAP 1+ C@ LSECS
   LNORM
-  LP @ HERE - 1+ ALLOT                  \ the text is dictionary now
   LBUF @ 'SRC ! ;
+
+\ BLOAD reads a binary file to wherever you ask, steps the four-byte header
+\ off the front, and hands back the length that header claims.
+VARIABLE BLA
+: BLOAD ( n addr -- len ) BLA ! FPICK 0= IF 0 EXIT THEN
+  FSEC SECBUF DREAD DROP
+  BLA @ LP !
+  FENTRY DUP C@ SWAP 1+ C@ LSECS
+  BLA @ 2 + @
+  BLA @ 4 + BLA @ ROT DUP >R MOVE R> ;
+
+\ The graphics screen is half in each bank, so saving one is two saves with
+\ the bank switched between them.  Nothing else may print while aux is
+\ selected: with 80STORE set the same switch moves the text screen.
+: AUXBANK $C055 C@ DROP ;
+: MAINBANK $C054 C@ DROP ;
 
 \ --- the greeting ----------------------------------------------------------
 : HELP
@@ -283,15 +422,21 @@ VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
   ." n LOCK           LOCK OR UNLOCK A FILE" CR
   ." n DEL   n REN    DELETE OR RENAME ONE" CR
   ." n LOAD           INTERPRET A TEXT FILE AS FORTH" CR
+  ." addr len SAVE    WRITE A TEXT FILE, ASKING FOR THE NAME" CR
+  ." addr len BSAVE   THE SAME AS A BINARY FILE" CR
+  ." n addr BLOAD     READ ONE BACK, RETURNING ITS LENGTH" CR
   ." WORDS            EVERY DEFINITION IN THE DICTIONARY" CR
   ." HGR   TEXT       GRAPHICS SCREEN ON, AND BACK TO HERE" CR
   ." n HCOLOR         0 BLACK 1 GREY 2 GREY 3 WHITE" CR
   ." flag HXOR        DRAW BY XOR, SO DRAWING TWICE ERASES" CR
   ." x y HPLOT        x1 x2 y HLINE        x1 y1 x2 y2 HLINE2" CR
   ." x y r HCIRCLE    x y r HDISC          HCLS" CR
+  ." x y HFILL        FLOOD THE REGION AROUND A POINT" CR
+  ." a w h x y BLIT   DRAW A BITMAP, 8 PIXELS PER BYTE" CR
   ." x1 x2 y1 y2 HBOX AND HFRAME" CR
   ." col row TAT      T. TEXT ON THE GRAPHICS SCREEN, flag TINV" CR
   ." KEY? KEYC BTN    n PADDLE" CR
+  ." CLICK  p n TONE  n MS  VBL" CR
   ." t s addr DREAD   t s addr DWRITE      RAW SECTORS" CR ;
 \ ." compiles an inline string, so it only says anything from inside a
 \ definition; at the top level it would build one nobody runs.

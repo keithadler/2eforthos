@@ -158,6 +158,12 @@ Refill:
         lda     #0
         sta     TIBLEN
         sta     TOIN
+        ; A loaded file lives on hi-res page 1, and 80STORE is set for the
+        ; console -- so $2000-$3FFF follows PAGE2, which the 80-column
+        ; firmware toggles on every character it prints.  Putting it back to
+        ; main here, once per line, is what makes that buffer readable; the
+        ; firmware sets it again for itself the next time it prints.
+        bit     $C054
 @copy:  ldy     #0
         lda     (SRC),y
         beq     @exhausted
@@ -975,44 +981,25 @@ CommaPopped:
         .byte   2 | F_IMMED
         .byte   '.', '"'
 W_DOTQUOTE:
+        jsr     ParseQuoted
+        lda     STATEV
+        ora     STATEV+1
+        beq     @now
         lda     #<W_PDOTQ
         ldy     #>W_PDOTQ
         jsr     CommaWord
-        lda     DPV                     ; remember where the count byte goes
-        sta     STRLEN
-        lda     DPV+1
-        sta     STRLEN+1
-        lda     #0
-        jsr     CComma                  ; placeholder count byte
-        lda     #0
+        jmp     CommaCountedNext
+@now:   lda     #0
         sta     NCNT
-        ldy     TOIN                    ; skip exactly one delimiting blank
-        cpy     TIBLEN
-        bcs     @done
-        lda     TIB,y
-        cmp     #' '
-        bne     @copy
-        iny
-@copy:  cpy     TIBLEN
-        bcs     @done
-        lda     TIB,y
-        iny
-        cmp     #'"'
+@l:     lda     NCNT
+        cmp     PIDX
         beq     @done
-        sty     YSAV
-        jsr     CComma
-        ldy     YSAV
+        ldy     NCNT
+        lda     SQBUF,y
+        jsr     PutChar
         inc     NCNT
-        bne     @copy
-@done:  sty     TOIN
-        lda     STRLEN
-        sta     UTMP
-        lda     STRLEN+1
-        sta     UTMP+1
-        lda     NCNT
-        ldy     #0
-        sta     (UTMP),y
-        NEXT
+        bne     @l
+@done:  NEXT
 
 ; \ -- ignore the rest of the line.  Spelled in bytes: ca65 string escapes
 ; are off, so a lone backslash is easier to state directly.
