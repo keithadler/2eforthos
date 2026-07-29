@@ -1179,6 +1179,19 @@ TESTS = {
     files 0
 """,
 
+"shot-float": """
+    load FLOAT.FTH
+    wait 2400
+    clear
+    type CONSTANTS
+    wait 900
+    type ROOTS
+    wait 1200
+    type TRIG
+    wait 1800
+    shot
+""",
+
 "shot-chart": """
     load CHART.FTH
     wait 2400

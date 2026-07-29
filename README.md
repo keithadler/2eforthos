@@ -1,37 +1,90 @@
 # 2E FORTH OS
 
-(C) 2026 Keith Adler — [MIT](LICENSE)
+A Forth operating system for the Apple //e that **boots from its own sector
+and talks to the disk a nibble at a time** — no DOS on the floppy and none in
+memory. 290 words, an 80-column console, two graphics screens, and floating
+point borrowed from the ROM.
 
-Woz handed out the Apple I schematics at Homebrew and printed the whole
-Monitor and Integer BASIC listings in the Red Book, so that anyone who wanted
-to know how it worked could read it. He never asked for anything back, but he
-did put his name on the work. MIT is that arrangement written down.
+![the console at boot](docs/images/console-boot.png)
 
-Apple's ROMs are not covered and are not here — `make roms` rebuilds them.
-
-A Forth system that boots to an **80-column console** on an emulated Apple
-//e, with a **560x192 monochrome double hi-res** screen the language can turn
-on when a program wants it.  6502 source in, bootable floppy out — no DOS on
-the disk and none in memory.
+6502 source in, bootable 140K floppy out.
 
 ```bash
-make roms         # rebuild the Apple ROM set (once, see Emulator below)
-make run          # assemble -> disk -> boot in MAME -> screenshot
-make gui          # same, but leaves the window up so you can drive it
-open shots/apple2ee/0000.png
+make roms     # rebuild the Apple ROM set from AppleWin and apple2js (once)
+make gui      # boot it in a window
+make test     # 300+ assertions, headless, about two minutes
 ```
 
-Boot prints the banner, reads the disk catalog, and stops at the Forth
-prompt in 80 columns.  `12 34 * .` prints `408`.
+---
+
+## What it does
+
+**It decompiles itself.** `SEE` walks a word's thread and names every cell —
+including the inline literal in `GREET`. `DUMP` shows memory as hex and
+characters.
+
+![SEE and DUMP](docs/images/ex-inspect.png)
+
+**Floating point, called rather than written.** Several kilobytes of debugged
+five-byte arithmetic and transcendentals were already in the ROM, so π is four
+times the arctangent of one and √2 squared comes back as exactly 2. The
+language card holds the dictionary, so every call switches the ROM in and
+saves the zero page Applesoft treads on.
+
+![floating point from the ROM](docs/images/ex-float.png)
+
+**560×192 double hi-res**, with the even byte columns in auxiliary memory.
+Lines of any slope, filled and outlined shapes, circles, flood fill, bitmaps,
+XOR drawing, and text on the graphics screen.
+
+![shapes, flood fill and a sprite](docs/images/demo-gfx.png)
+
+**Two fans of lines drawn in XOR**, so where a line from one crosses a line
+from the other they cancel and the interference is what remains.
+
+![interference patterns](docs/images/demo-moire.png)
+
+**Arcs and pie slices**, written the parametric way once `FSIN` and `FCOS`
+existed — a ninety-sided polygon is a circle at this resolution.
+
+![arcs and pie slices](docs/images/ex-arc.png)
+
+**A second screen when 560 pixels is the wrong tool.** Lo-res is the text page
+seen differently — two blocks to a byte, sixteen colours, no shifting — which
+is what a chart wants.
+
+![a bar chart on the lo-res screen](docs/images/ex-chart.png)
+
+**An event queue and hit testing**, loadable from the floppy rather than
+built in: a press becomes an `EV-DOWN` at the right coordinates and
+`HOT-FIND` returns the execution token for whatever region it landed in.
+
+![events and hit testing](docs/images/ex-pointer.png)
+
+**Its own filesystem, without DOS underneath it.** `CAT` reads the catalog
+through a Disk II driver written from scratch — half-track seeking, 6-and-2
+decoding, address fields matched inside a 32-cycle window.
+
+![the disk catalog](docs/images/console-cat.png)
+
+---
+
+## How it works
+
+A Forth system that boots to an **80-column console**, with a **560x192
+monochrome double hi-res** screen and a **40x48 lo-res** one the language can
+turn on when a program wants them.
 
 | command | |
 |---|---|
 | `CAT` | list the disk — number, lock, name, type, size |
+| `n LOAD` | compile a Forth source file off the floppy |
 | `n LOCK` | lock or unlock file *n* |
 | `n DEL` | delete it (refused if locked) |
 | `n REN` | rename it — type the new name at the prompt |
 | `WORDS` | every definition in the dictionary |
-| `HELP` | a summary of the above and the graphics words |
+| `SEE NAME` | decompile one |
+| `HELP` | a summary |
 
 The graphics screen is a **word, not a mode you live in**: `HGR` turns it on,
 the drawing words draw, `TEXT` comes back to the console.
@@ -48,12 +101,19 @@ the image, and MAME writes it back — delete a file inside the emulator and
 therefore boots a scratch copy so automated runs stay reproducible; `make gui`
 uses the real image, so changes you make interactively stick.
 
-Boot takes about 18 emulated seconds, most of it compiling the system's own
+Boot takes about 31 emulated seconds, most of it compiling the system's own
 Forth source (see *Boot cost* below).
 
-![the console at boot](docs/images/console-boot.png)
+## Licence
 
-![interference patterns from the MOIRE demo](docs/images/demo-moire.png)
+[MIT](LICENSE). Woz handed out the Apple I schematics at Homebrew and printed
+the whole Monitor and Integer BASIC listings in the Red Book, so that anyone
+who wanted to know how it worked could read it. He never asked for anything
+back, but he did put his name on the work. MIT is that arrangement written
+down.
+
+Apple's ROMs are not covered and are not here — `make roms` rebuilds them and
+verifies every CRC.
 
 ## Documentation
 
