@@ -666,17 +666,30 @@ every image in `docs/` was captured.
 ## The built disk
 
 `dist/2eforthos.dsk` is a bootable 140K DOS-order image, committed so the
-system can be run without a toolchain: point any Apple //e emulator at it, or
-write it to a real floppy with ADTPro. It boots to the Forth prompt in about
-thirty seconds.
+system can be run without cc65 or a2kit: it boots to the Forth prompt in
+about thirty seconds.
 
-It is refreshed by `make dist` rather than by every build, so it changes when
-someone means it to and not on every `make`. `build/` stays scratch and stays
-ignored.
+**You still need the ROMs.** Apple's are not ours to redistribute and are not
+in this repository — `make roms` rebuilds the set from AppleWin and apple2js,
+verifying every CRC against what MAME expects. Without them MAME cannot find
+the //e firmware or the Disk II controller and drops the machine to the
+monitor prompt, which looks like the image being broken and is not.
 
 ```bash
-make dist                     # rebuild the shipped image from source
-mame apple2ee -flop1 dist/2eforthos.dsk    # or any //e emulator
+make roms                                  # once: rebuild roms/ from source
+cd ~/2eforthos
+mame apple2ee -rompath ./roms -sl4 "" -flop1 dist/2eforthos.dsk
+```
+
+`-rompath` is the part people miss, and `-sl4 ""` empties a slot whose
+default card wants a ROM we do not have. `make gui` passes both for you,
+which is the easier way to run it from a clone of this repository.
+
+The image is refreshed by `make dist` rather than by every build, so it
+changes when someone means it to. `build/` stays scratch and stays ignored.
+
+```bash
+make dist       # rebuild the shipped image from source
 ```
 
 ## Build system
