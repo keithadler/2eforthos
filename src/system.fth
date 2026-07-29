@@ -606,6 +606,45 @@ VARIABLE MKBASE VARIABLE MKLATEST
   R> @ LATEST !
   REINDEX ;
 
+\ --- inline tables of numbers ---------------------------------------------
+\ Applesoft's DATA and READ.  The values go in the dictionary between DATA:
+\ and ;DATA, and READ-VAL walks them; RESTORE-DATA winds back to the start.
+VARIABLE DATA0 VARIABLE DATAP VARIABLE DATAN
+: DATA: ( -- ) HERE DATA0 ! HERE DATAP ! 0 DATAN ! ;
+: +VAL ( n -- ) , 1 DATAN +! ;
+: ;DATA ( -- ) DATA0 @ DATAP ! ;
+: DATA# ( -- n ) DATAN @ ;
+: RESTORE-DATA ( -- ) DATA0 @ DATAP ! ;
+: DATA-END? ( -- f ) DATAP @ DATA0 @ - 2/ DATAN @ < 0= ;
+: READ-VAL ( -- n ) DATA-END? IF 0 EXIT THEN DATAP @ @ 2 DATAP +! ;
+
+\ --- odds and ends ---------------------------------------------------------
+\ A power by repeated multiplication: exact, where FEXP and FLN would round.
+: IPOW ( n e -- n^e ) 1 SWAP ?DUP IF 0 ?DO OVER * LOOP THEN NIP ;
+
+\ Fisher-Yates, w bytes to the element.  RND-RANGE gives the swap partner.
+VARIABLE SHA VARIABLE SHW VARIABLE SHP VARIABLE SHQ
+: SH@ ( i -- addr ) SHW @ * SHA @ + ;
+: SHSWAP ( i j -- )
+  SH@ SHQ !  SH@ SHP !
+  SHW @ 0 ?DO
+    SHP @ I + C@
+    SHQ @ I + C@
+    SHP @ I + C!
+    SHQ @ I + C!
+  LOOP ;
+: SHUFFLE ( addr n w -- )
+  SHW ! SWAP SHA !
+  1 SWAP 1- ?DO
+    0 I RND-RANGE I SHSWAP
+  -1 +LOOP ;
+
+\ Applesoft's WAIT: sit on a location until the masked bits match.
+VARIABLE WBA VARIABLE WBM VARIABLE WBV
+: WAIT-BIT ( addr mask val -- )
+  WBV ! WBM ! WBA !
+  BEGIN WBA @ C@ WBM @ AND WBV @ = UNTIL ;
+
 \ --- lo-res lines ----------------------------------------------------------
 \ Forty blocks across and forty-eight down -- but in GR the bottom four text
 \ rows are the console's, so rows 40-47 belong to it and anything drawn there

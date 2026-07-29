@@ -1626,6 +1626,98 @@ TESTS = {
     depth 0
 """,
 
+# Applesoft's DATA and READ: values in the dictionary, walked in order.
+"data-read": """
+    type DATA: 10 +VAL 20 +VAL 30 +VAL ;DATA
+    type DATA#
+    stack 3
+    clear
+    type READ-VAL READ-VAL READ-VAL
+    stack 30 20 10
+    clear
+    type READ-VAL
+    stack 0
+    clear
+    type RESTORE-DATA READ-VAL
+    stack 10
+""",
+
+"ipow": """
+    type 2 10 IPOW
+    stack 1024
+    clear
+    type 3 0 IPOW 7 1 IPOW -2 3 IPOW
+    stack -8 7 1
+""",
+
+# FDUP FSWAP FOVER: without them a formula cannot reach its operands twice.
+"float-stack": """
+    type 7 S>F FDUP F* F>S
+    stack 49
+    clear
+    type FDEPTH
+    stack 0
+    clear
+    type 10 S>F 3 S>F FSWAP F- F>S
+    stack -7
+    clear
+    type 2 S>F 5 S>F FOVER F* F>S FDROP FDROP
+    stack 10
+    clear
+    type FDEPTH
+    stack 0
+""",
+
+"shuffle-wait": """
+    type CREATE SHT 1 C, 2 C, 3 C, 4 C, 5 C, 6 C, 7 C, 8 C,
+    type : SUM8 0 8 0 ?DO SHT I + C@ + LOOP ;
+    type SUM8
+    stack 36
+    clear
+    type 9 RND-SEED! SHT 8 1 SHUFFLE
+    wait 600
+    type SUM8
+    stack 36
+    clear
+    type SHT C@ 1 = SHT 1+ C@ 2 = AND
+    stack 0
+    clear
+    type $0E00 170 SWAP C! $0E00 255 170 WAIT-BIT 5 6 *
+    stack 30
+""",
+
+"finance": """
+    load FINANCE.FTH
+    wait 2400
+    clear
+    type 2 S>F 10 S>F F** F>S
+    stack 1024
+    clear
+    type FDEPTH
+    stack 0
+    clear
+    type 10000 500 30 PMT F>S
+    stack 650
+    clear
+    type 10000 500 30 COMPOUND F>S
+    stack 32767
+    clear
+    type 10000 500 30 COMPOUND F.
+    depth 0
+    clear
+    type 1000 500 10 PV F>S
+    stack 7721
+    clear
+    type 1000 500 10 FV F>S
+    stack 12577
+    clear
+    type 9000 1000 5 SLN F>S
+    stack 1600
+    clear
+    type FDEPTH
+    stack 0
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
