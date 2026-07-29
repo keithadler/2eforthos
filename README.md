@@ -44,6 +44,18 @@ uses the real image, so changes you make interactively stick.
 Boot takes about 18 emulated seconds, most of it compiling the system's own
 Forth source (see *Boot cost* below).
 
+![the console at boot](docs/images/console-boot.png)
+
+![interference patterns from the MOIRE demo](docs/images/demo-moire.png)
+
+## Documentation
+
+| | |
+|---|---|
+| [docs/LANGUAGE.md](docs/LANGUAGE.md) | the whole word set, 310 of them, with stack effects |
+| [docs/DEMOS.md](docs/DEMOS.md) | the six programs on the disk, with screenshots and source |
+| this file | how it is built and why it works the way it does |
+
 ## Layout
 
 | path | what |
@@ -53,17 +65,20 @@ Forth source (see *Boot cost* below).
 | `src/dict.inc` | dictionary format and the macros that build it |
 | `src/kernel.inc` | inner interpreter and the primitive word set |
 | `src/interp.inc` | outer interpreter, compiler, defining words |
-| `src/hires.inc` | the 280×192 screen driver |
+| `src/hires.inc` | the 560x192 double hi-res driver |
 | `src/gwords.inc` | Forth bindings for the driver |
 | `src/input.inc` | keyboard and game port, as Forth words |
 | `src/math.inc` | 16x16 multiply, 32/16 divide, shifts, bulk memory |
 | `src/compile.inc` | DOES>, the rest of the loop set, strings, FORGET |
 | `src/fill.inc` | flood fill and bitmap drawing |
 | `src/sound.inc` | the speaker, and the two ways to tell the time |
-| `src/text.inc` | 40x24 text on the hi-res screen |
+| `src/text.inc` | 80x24 text on the hi-res screen |
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
+| `disk/*.FTH` | the demos, put on the floppy by `make disk` |
+| `docs/LANGUAGE.md` | every word, with stack effects |
+| `docs/DEMOS.md` | the demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly |
 | `examples/hello.s` | the original 31-byte hello world |
 | `tools/contest.py` | the console test suite — types Forth, checks machine state |
@@ -351,6 +366,26 @@ what makes that possible.
 A track byte of zero means an unused slot in a track/sector list, which is
 unambiguous because track 0 holds the boot loader and is never allocated to a
 file.
+
+## The demos on the disk
+
+Six Forth programs ship on the floppy. `CAT` lists them; `n LOAD` reads one
+in and tells you what to type. [docs/DEMOS.md](docs/DEMOS.md) has the source
+and a screenshot of each.
+
+| | |
+|---|---|
+| `GFX` | shapes, flood fill, a sprite, text on the graphics screen |
+| `MOIRE` `BANDS` | XOR interference patterns; the eight dither colours |
+| `BOUNCE` | an XOR sprite animation paced off the video counter |
+| `PRIMES` | loops and right-justified output |
+| `DEMO` | `CREATE ... DOES>` and `CASE` |
+| `SCALE` `CHIRP` `SIREN` | the speaker |
+
+Each defines a marker as its first word, so `FORGET GFX--` and friends give
+the space back. With about 1.1K of dictionary free, it is one demo at a time.
+
+![HELP on the machine](docs/images/console-help.png)
 
 ## Memory map
 
