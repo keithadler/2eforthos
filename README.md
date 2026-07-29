@@ -564,6 +564,37 @@ Three things about the harness were worth more than they cost:
   or dictionary and moves as the system grows, which is how a working test
   started failing.
 
+## The language card
+
+Sixteen kilobytes of RAM at `$D000-$FFFF`, on every //e, and this system does
+not use a byte of it. It is the obvious next place for the dictionary to grow
+into, and there is one thing in the way.
+
+What was measured, rather than assumed:
+
+- **The card is there and writable.** Reading `$C08B` twice gives
+  read-RAM/write-RAM on bank 1; poking `$D000`, `$E000` and `$FE00` and
+  reading them back works. There is a test for it — `make test T=lc-ram`.
+- **Console output does not survive the ROM being banked out.** `EMIT` with
+  the card switched in never returns. The 80-column firmware lives at `$C300`
+  and `$C800-$CFFF`, which the card does not cover, but it evidently calls
+  into `$F8xx-$FFxx`, which it does.
+
+So using the card for anything executable means replacing what the ROM does
+for us first:
+
+| | |
+|---|---|
+| `COUT` | our own 80-column output: `$0400-$07FF` in both banks, scrolling both, and a cursor |
+| `GETLN` | our own line editor |
+| `PREAD` | fifteen lines, trivial |
+| `$FFFA-$FFFF` | the CPU's vectors have to exist in the card, or reset and IRQ go somewhere random |
+
+That is a few hundred lines of assembly and a real risk of subtle breakage in
+the part of the system everything else depends on. It is a project, not a
+finishing touch — which is why it has not been done. The dictionary went from
+1.1K to 11K without it.
+
 ## Known issues
 
 - **`NFILE` over-counts by one after writing a file to a catalog that spans

@@ -750,6 +750,19 @@ TESTS = {
     stack 7
 """,
 
+# Is the language card there, and can it be written?  Read $C08B twice to
+# get read-RAM/write-RAM on bank 1, poke, peek, then $C082 to put the ROM
+# back -- all on one line, so nothing tries to print while the ROM is gone.
+"lc-ram": """
+    type $C08B C@ DROP $C08B C@ DROP 123 $D000 C! $D000 C@ $C082 C@ DROP
+    stack 123
+    clear
+    type $C08B C@ DROP $C08B C@ DROP 77 $E000 C! 88 $FE00 C! $C082 C@ DROP
+    depth 0
+    type $C08B C@ DROP $C08B C@ DROP $E000 C@ $FE00 C@ $C082 C@ DROP
+    stack 88 77
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
