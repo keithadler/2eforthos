@@ -943,6 +943,230 @@ TESTS = {
     stack 0
 """,
 
+# --- coverage: words that had neither a test nor an example ---------------
+"cov-stack": """
+    type 1 2 3 4 2SWAP
+    stack 2 1 4 3
+    clear
+    type 1 2 3 4 2OVER
+    stack 2 1 4 3 2 1
+    clear
+    type 1 2 3 -ROT
+    stack 2 1 3
+    clear
+    type 5 3 U> 3 5 U> 4 0> -4 0>
+    stack 0 -1 0 -1
+    clear
+    type 5 1 10 WITHIN 15 1 10 WITHIN 1 1 10 WITHIN
+    stack -1 0 -1
+""",
+
+"cov-rstack": """
+    type : RT1 >R 5 R> ;
+    type 9 RT1
+    stack 9 5
+    clear
+    type : RT2 >R R@ R> + ;
+    type 6 RT2
+    stack 12
+""",
+
+"cov-memory": """
+    type $0E00 111 SWAP ! $0E02 222 SWAP !
+    type $0E00 2@
+    stack 111 222
+    clear
+    type 333 444 $0E00 2! $0E00 @ $0E02 @
+    stack 333 444
+    clear
+    type $0E10 8 65 FILL $0E10 4 ERASE $0E10 C@ $0E14 C@
+    stack 65 0
+    clear
+    type $0E20 4 BLANK $0E20 C@
+    stack 32
+    clear
+    type $0E30 77 SWAP C! $0E30 C@
+    stack 77
+    clear
+    type 2 CELLS 3 CELL+ 3 CHAR+ 5 ALIGN 6 ALIGNED
+    stack 6 5 4 5 4
+""",
+
+"cov-numbers": """
+    type 1000 2 U/MOD
+    stack 500 0
+    clear
+    type 5 INVERT 8 2/
+    stack 4 -6
+    clear
+    type -6 S>D DABS
+    stack 0 6
+    clear
+    type 5 0 3 0 D-
+    stack 0 2
+    clear
+    type 100 3 7 */MOD
+    stack 42 6
+    clear
+    type 100 0 7 FM/MOD
+    stack 14 2
+""",
+
+"cov-output": """
+    type 42 U. 42 . 7 .R
+    depth 0
+    clear
+    type $0E40 111 SWAP ! $0E40 ?
+    depth 0
+    clear
+    type 5 SPACES SPACE
+    depth 0
+    clear
+    type -1234 0 D.
+    depth 0
+    clear
+    type 1234 6 U.R
+    depth 0
+    clear
+    type S" ABC   " -TRAILING NIP
+    stack 3
+    clear
+    type 255 0 <# #S #> TYPE
+    depth 0
+""",
+
+"cov-compile": """
+    type : CV1 5 ; IMMEDIATE
+    type : CV2 CV1 ;
+    type CV2
+    stack 5
+    clear
+    type : CV3 0 BEGIN 1+ DUP 3 > IF EXIT THEN AGAIN ;
+    type CV3
+    stack 4
+    clear
+    type : CV4 ' DUP COMPILE, ; 
+    depth 0
+    clear
+    type STATE @ DP @ HERE =
+    stack -1 0
+""",
+
+"cov-disk": """
+    type DRECAL
+    depth 0
+    clear
+    type 17 DSEEK
+    depth 0
+    clear
+    type 1 DSTEP
+    depth 0
+    clear
+    type DHALF
+    depth 1
+    clear
+    type 17 0 $0E80 DREAD
+    stack 0
+    clear
+    type DBYTES
+    depth 6
+    clear
+    type DADDR
+    depth 3
+""",
+
+"cov-banks": """
+    type MAINBANK $0E90 123 SWAP ! $0E90 @
+    stack 123
+    clear
+    type AUXBANK MAINBANK $0E90 @
+    stack 123
+""",
+
+"cov-graphics2": """
+    type HGR HCLS 3 HCOLOR
+    type 107 40 160 HVLINE
+    nonzero 2228 40
+    type 0 0 TAT -1 TINV
+    type 65 TEMIT 0 TINV
+    type TEXT
+    depth 0
+""",
+
+"cov-files": """
+    type S" : ZZ 5 ;" SAVE
+    type COVTMP.FTH
+    wait 1800
+    clear
+    loadwith COVTMP.FTH LOCK
+    wait 900
+    clear
+    loadwith COVTMP.FTH LOCK
+    wait 900
+    clear
+    loadwith COVTMP.FTH DEL
+    wait 1800
+    type NFILE @
+    stack 23
+""",
+
+# The last of the uncovered words.  BYE is not run -- it halts the machine --
+# but it is looked up, which proves it is there and spelled right.
+"cov-rest": """
+    type 1 2 3 ABORT
+    depth 0
+    clear
+    type : AB1 ABORT" GONE" ;
+    type 0 AB1
+    depth 0
+    clear
+    type 99 ' AB1 DROP
+    stack 99
+    clear
+    type ' BYE 0<>
+    stack -1
+    clear
+    type PAGE
+    depth 0
+""",
+
+"cov-rest2": """
+    type CREATE CB1 7 , ' CB1 >BODY @
+    stack 7
+    clear
+    type $0EA0 4 65 FILL $0EA0 $0EB0 4 CMOVE $0EB0 C@
+    stack 65
+    clear
+    type REINDEX 3 4 +
+    stack 7
+    clear
+    type NFREE @ 0 U>
+    stack -1
+    clear
+    type CATBUF VTOCBUF TSBUF
+    stack 2560 2304 4096
+""",
+
+# ASKLN reads a line; REN renames using one.  Both go through the same path
+# SAVE does, so the answer is typed as the following line.
+"cov-askln": """
+    type S" : QQ 1 ;" SAVE
+    type COVREN.FTH
+    wait 1800
+    clear
+    loadwith COVREN.FTH REN
+    type COVGONE.FTH
+    wait 1800
+    clear
+    type NFILE @
+    stack 24
+    clear
+    loadwith COVGONE.FTH DEL
+    wait 1800
+    type NFILE @
+    stack 23
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0

@@ -147,8 +147,11 @@ gui: $(DSK) monitor
 test: $(DSK) monitor
 	python3 tools/contest.py $(T)
 
+# The standalone path that predates the kernel: assemble one file and run
+# it on a bare machine, no disk and no Forth.  examples/hello.s is the
+# whole of it.
 poke:
-	./run.sh $(SRCDIR)/$(PROG).s
+	./run.sh examples/hello.s
 
 clean:
 	rm -rf build shots

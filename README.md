@@ -85,8 +85,8 @@ Forth source (see *Boot cost* below).
 | `examples/hello.s` | the original 31-byte hello world, from before any of this |
 | `tools/contest.py` | the console test suite — types Forth, checks machine state |
 | `tools/contest.lua` | the MAME side of it |
-| `tools/dumptext.lua` | dumps the text screen, zero page, and dictionary state |
-| `tools/drive.lua` | types lines into the running Forth at a pace it can keep up with |
+| `tools/words.lua` | dumps the text screen, zero page, and dictionary state |
+| `tools/contest.lua` | types lines into the running Forth at a pace it can keep up with |
 | `tools/fetch-roms.py` | rebuilds the MAME ROM set from AppleWin and apple2js |
 | `tools/mkfont.py` | carves a 7x8 font out of the Apple character ROM |
 | `tools/mkboot.py` | converts `system.fth` into a byte table the kernel interprets |
@@ -606,59 +606,45 @@ the failure that arrangement would invite.
 
 - **Nothing checks for dictionary overflow.** If `HERE` runs past `$BFFF` it
   walks into the I/O page, and writing there throws soft switches.
-- **`tools/dumptext.lua` shows only odd columns.** The console keeps even
+- **`tools/words.lua` shows only odd columns.** The console keeps even
   columns in auxiliary memory and the script reads main.
 
 ## Debugging
 
-Reading characters off a screenshot is guesswork. `tools/dumptext.lua` prints
-zero page and the dictionary state (`DP`, `LATEST`, `STATE`, whether the link
-chain terminates, and the newest definitions — the first name is whatever was
-being compiled if `STATE` is non-zero). Its screen dump now shows only the
-**odd** columns, since it reads main memory and the console keeps the even
-ones in aux:
+Four scripts, all driven the same way: `SDL_VIDEODRIVER=dummy` and
+`-video none` together, or MAME opens a window and takes over a Space. One
+without the other is not enough — `-video none` alone still opens a window on
+macOS, and the dummy driver alone fails to initialise OpenGL.
+
+**`tools/words.lua`** prints every name in the live dictionary. `WORDS` on the
+machine scrolls past faster than it can be read; this walks the definition
+chain in memory instead and prints the lot on one line, with a star on the
+immediate ones. It is what the coverage check in this repository runs on.
 
 ```bash
-mame apple2ee -rompath ./roms -sl4 "" -flop1 build/forth.dsk \
-  -skip_gameinfo -window -nothrottle -seconds_to_run 40 \
-  -autoboot_delay 0 -autoboot_script tools/dumptext.lua
+LATESTV=$(grep -i ' latestv$' build/forth.lbl | awk '{print strtonum("0x"$2)}') \
+SDL_VIDEODRIVER=dummy mame apple2ee -rompath ./roms -sl4 "" \
+  -flop1 build/forth.dsk -skip_gameinfo -video none -sound none \
+  -nothrottle -seconds_to_run 55 -autoboot_delay 0 \
+  -autoboot_script tools/words.lua
 ```
 
-`-autoboot_command` types at a fixed rate, and the Apple II keyboard has no
-buffer — a new keypress simply overwrites the last — so anything typed while
-Forth is busy interpreting is **silently lost**, which looks exactly like a
-logic bug. That is what `tools/contest.lua` exists to get right; for one-off
-poking, `tools/drive.lua` posts one line, waits, then posts the next:
+**`tools/contest.lua`** is the test harness, and the right tool for one-off
+poking too: it types a line, waits for the machine to finish it, and reads
+machine state rather than the screen. `-autoboot_command` types at a fixed
+rate, and the Apple II keyboard has no buffer — a new keypress overwrites the
+last — so anything typed while Forth is busy is **silently lost**, which looks
+exactly like a logic bug. Use `python3 tools/contest.py --list` and add a case
+rather than driving MAME by hand.
 
-```bash
-DRIVE='2 3 + .;;HGR;;3 HCOLOR 0 559 96 HLINE;;TEXT' START=1200 GAP=240 \
-mame apple2ee -rompath ./roms -sl4 "" -flop1 build/forth.dsk \
-  -skip_gameinfo -window -nothrottle -seconds_to_run 60 \
-  -autoboot_delay 0 -autoboot_script tools/drive.lua
-```
+**`tools/pc.lua`** samples the program counter once a frame and prints the
+tail, which is how you find out where a hang is. **`tools/profile.lua`** does
+the same over a range and counts, for finding where the boot time goes. Map
+the addresses back with `build/forth.lbl`.
 
-It waits for the system to be ready rather than guessing: the kernel's
-bootstrap source pointer (`SRC+1`) is non-zero while the built-in source is
-being interpreted and drops to zero when the interpreter turns to the
-keyboard — exactly when the prompt appears. `GAP` is the frames between
-lines; widen it for lines that touch the disk.
-
-Two flag-clobber bugs cost most of the debugging time on this system, both
-the same shape — a flag set, then an unrelated instruction between it and the
-branch:
-
-```
-ora 1,x        ; Z now says whether TOS is zero
-inx            ; ...and INX just overwrote it with "is X zero"
-inx
-beq DoBranch   ; never taken
-```
-
-That was `0BRANCH`, so `IF` never branched and every conditional body always
-ran. The other was `LDX XSAV` before `BMI` in `(LOOP)`, which made every
-counted loop infinite. Both looked like higher-level logic errors. If
-something conditional misbehaves here, check the instruction between the test
-and the branch first.
+Reading characters off a screenshot is guesswork, and worse here than usual:
+the console keeps its even columns in auxiliary memory, so anything reading
+`$0400-$07FF` from main sees every other character.
 
 ## Build system
 
