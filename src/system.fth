@@ -390,6 +390,107 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
 : AUXBANK $C055 C@ DROP ;
 : MAINBANK $C054 C@ DROP ;
 
+\ --- reading a file a byte at a time ---------------------------------------
+\ LOAD interprets a file and BLOAD swallows one whole; this is for the case
+\ in between, where a program wants the bytes and does not want the whole
+\ file in memory at once.
+\
+\ One file at a time.  A handle table would want a buffer each, and 256
+\ bytes a handle is not a thing this machine has to spare -- so the buffer,
+\ the track/sector list and the position are single and named plainly.
+\
+\ FGETC returns every byte of every sector the file was allocated.  DOS
+\ stores no byte count for a text file -- it ends at the first zero -- so
+\ where a file stops is the caller's business, exactly as it is for DOS.
+CREATE FOBUF 256 ALLOT
+VARIABLE FOT VARIABLE FOS          \ the track/sector list being walked
+VARIABLE FOI                       \ which pair in it comes next
+VARIABLE FOP                       \ position within FOBUF
+VARIABLE FOOK VARIABLE FOEOF
+
+: FONEXT ( -- ok )                 \ pull the next data sector into FOBUF
+  BEGIN
+    FOT @ 0= IF 0 EXIT THEN
+    FOI @ 122 < IF
+      TSBUF 12 + FOI @ 2* +  1 FOI +!
+      DUP C@ IF                    \ a used slot: read it
+        DUP C@ SWAP 1+ C@ FOBUF RD 0= IF DISKERR 0 EXIT THEN
+        0 FOP ! -1 EXIT
+      ELSE DROP THEN               \ an empty one: keep looking
+    ELSE                           \ this list is used up; is there another?
+      TSBUF 1+ C@ TSBUF 2 + C@ FOS ! FOT !
+      FOT @ IF
+        FOT @ FOS @ TSBUF RD 0= IF DISKERR 0 EXIT THEN
+        0 FOI !
+      THEN
+    THEN
+  AGAIN ;
+
+: FOPEN ( n -- ok )
+  FPICK 0= IF 0 EXIT THEN
+  FSEC SECBUF RD 0= IF DISKERR 0 EXIT THEN
+  FENTRY DUP C@ SWAP 1+ C@ FOS ! FOT !
+  FOT @ FOS @ TSBUF RD 0= IF DISKERR 0 EXIT THEN
+  0 FOI !  256 FOP !               \ forces the first read
+  0 FOEOF !  -1 FOOK !  -1 ;
+
+: FGETC ( -- c | -1 )
+  FOOK @ 0= IF -1 EXIT THEN
+  FOEOF @ IF -1 EXIT THEN
+  FOP @ 256 < 0= IF
+    FONEXT 0= IF -1 FOEOF ! -1 EXIT THEN
+  THEN
+  FOBUF FOP @ + C@  1 FOP +! ;
+
+: FCLOSE ( -- ) 0 FOOK ! ;
+: FEOF? ( -- f ) FOEOF @ ;
+
+VARIABLE FRA VARIABLE FRN VARIABLE FRG
+: FREAD ( addr n -- got )
+  FRN ! FRA ! 0 FRG !
+  FRN @ 0 ?DO
+    FGETC DUP 0< IF DROP LEAVE THEN
+    FRA @ FRG @ + C!
+    1 FRG +!
+  LOOP FRG @ ;
+
+\ --- a fresh filesystem ----------------------------------------------------
+\ The disk must already be formatted: writing address fields needs a track
+\ writer this driver does not have, and DWRITE can only replace a sector that
+\ is already there.  This lays down a VTOC and an empty catalog chain on top
+\ of one, which is what INIT does once the format is done.
+\
+\ Tracks 0-10 and 17 are marked used, because that is where this system keeps
+\ its boot sector, its kernel and its own source.  INIT on the disk you
+\ booted from will therefore leave the machine bootable and lose only the
+\ files.
+VARIABLE IVT
+: IBITS ( track -- )               \ mark one track free in VTOCBUF
+  4 * 56 + VTOCBUF + DUP 255 SWAP C! 1+ 255 SWAP C! ;
+: IUSED ( track -- )
+  4 * 56 + VTOCBUF + DUP 0 SWAP C! 1+ 0 SWAP C! ;
+: INIT ( -- )
+  VTOCBUF 256 0 FILL
+  17 VTOCBUF 1+ C!  15 VTOCBUF 2 + C!   \ first catalog sector
+  3 VTOCBUF 3 + C!                      \ DOS 3.3
+  254 VTOCBUF 6 + C!                    \ volume
+  122 VTOCBUF $27 + C!
+  18 VTOCBUF $30 + C!  1 VTOCBUF $31 + C!
+  35 VTOCBUF $34 + C!  16 VTOCBUF $35 + C!
+  0 VTOCBUF $36 + C!  1 VTOCBUF $37 + C!
+  35 0 DO I IBITS LOOP
+  11 0 DO I IUSED LOOP
+  17 IUSED
+  17 0 VTOCBUF WR 0= IF DISKERR EXIT THEN
+  15 0 DO
+    SECBUF 256 0 FILL
+    15 I - 1- ?DUP IF                   \ the next catalog sector, 14..0
+      17 SECBUF 1+ C!  SECBUF 2 + C!
+    THEN
+    17 15 I - SECBUF WR 0= IF DISKERR EXIT THEN
+  LOOP
+  CATLOAD FREE NFREE ! ;
+
 \ --- loading source from the disk -----------------------------------------
 \ The text goes on hi-res page 1: eight kilobytes that the dictionary cannot
 \ reach and that nothing else wants while source is being read.  Reading a
