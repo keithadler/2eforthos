@@ -54,12 +54,14 @@ SPEED ?= 8
 BOOTFRAMES ?= 2000
 # Window size as a multiple of the emulated screen.  MAME keeps the aspect
 # ratio, so this is the box it fits the picture into.
-SCALE ?= 2
+SCALE ?= 1
 MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
                -snapshot_directory $(SHOTS) \
                -cfg_directory $(CURDIR)/cfg -mouse
 
-# Only the interactive target puts anything on the display.
+# Only the interactive target puts anything on the display, and it opens a
+# plain window -- never full screen, which on macOS takes over a Space.
+# SCALE=2 or 3 for a bigger one.
 MAME_WINDOW := -window -nomaximize \
                -resolution $(shell echo $$((560*$(SCALE))))x$(shell echo $$((384*$(SCALE))))
 
