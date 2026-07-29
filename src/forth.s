@@ -10,12 +10,14 @@
 ;
 ;   $0400-$07FF   the text screen, in both banks -- the 80-column firmware
 ;                 puts even columns in aux and odd ones in main
-;   $0D00-$0DFF   one sector of the system's own source, while booting
-;   $0800-$0FFF   one raw disk sector
-;   $1000-$1FFF   the parsed catalog, 36 bytes per file
+;   $0800-$0CFF   sector buffers: raw sector, VTOC, T/S list, disk nibbles
+;   $0D00-$0FFF   one sector of boot source while booting; scratch after
+;   $1000-$186F   the parsed catalog, 36 bytes per file
+;   $1870-$1FFF   uninitialized buffers, kept out of this image -- the one
+;                 map of that region is in kernel.inc
 ;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main interleave
 ;                 byte by byte to make 560 pixels per row
-;   $4000-$BEFF   this kernel, then the dictionary growing upward
+;   $4000-$BFFF   this kernel, then the dictionary growing upward
 ;
 ; The kernel is direct-threaded: a thread cell is a code field address and
 ; the inner interpreter ends in JMP (W).  See dict.inc for the layout.
@@ -129,25 +131,21 @@ FFLAGS:  .byte  0                       ; flags byte of the header being tested
 FCHR:    .byte  0
 NBKT:    .byte  0                       ; bucket of the header being created
 
-; Sixteen hash buckets, two bytes each.  BUCKETS holds each chain's head and
-; is live for the life of the system; BTAILS is scratch that BuildIndex uses
-; once at cold start to append in definition order.
-BUCKETS: .res   32
-BTAILS:  .res   32
+; The hash buckets (BUCKETS, BTAILS) and the numeric output buffer (NUMBUF)
+; live at absolute addresses above the catalog -- see the map in kernel.inc.
+; Nothing uninitialized belongs in this segment: a .res here would ship as
+; zeros in the image and cost the same bytes again in dictionary headroom.
 NEWHDR:  .word  0                       ; header being built
 STRLEN:  .word  0                       ; count byte of a compiling string
 CFLO:    .byte  0
 CFHI:    .byte  0
-NUMBUF:  .res   20                      ; digits, emitted in reverse.  A
-                                        ; cell in base 2 is sixteen of them
 
 ; $80 makes the drawing words XOR what they draw instead of replacing it, so
 ; the same call both draws and erases: drawing a shape twice leaves the screen
 ; as it was found.
 HXORF:   .byte  0
 
-INBUF   = $1C60                          ; ASKLN's copy of a typed line, also
-                                         ; up above the catalog
+; INBUF is above the catalog: kernel.inc has the map
 
 ; The two-cell thread DoRun executes: the word asked for, then the primitive
 ; that restores IP and returns to the assembly caller.

@@ -505,14 +505,14 @@ session.
 | range | what |
 |---|---|
 | `$0400-$07FF` | the text screen, in **both** banks — even columns in aux, odd in main |
-| `$0800-$0FFF` | one raw disk sector |
-| `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
+| `$0800-$0CFF` | sector buffers: raw sector, VTOC, track/sector list, disk nibbles |
+| `$0D00-$0FFF` | one sector of boot source while booting; scratch and `PAD` after |
+| `$1000-$186F` | the parsed catalog, 36 bytes per file |
+| `$1870-$1FFF` | every buffer that would otherwise ship as zeros in the image — hash buckets, flood seed stacks, line buffers, disk decode table, float stack (the whole map is in `src/kernel.inc`) |
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
-| `$0D00-$0DFF` | one sector of the system's own source, while booting |
-| `$1900-$1CBF` | fill seed stack and the two line buffers |
-| `$4000-$78E2` | the kernel |
-| `$78E3-$BFFF` | the user's dictionary, growing upward — 18K |
-| `$D000-$EDF3` | the system's own dictionary, in the language card |
+| `$4000-$7FB5` | the kernel |
+| `$7FB6-$BFFF` | the user's dictionary, growing upward — 16,458 bytes |
+| `$D000-$FD3F` | the system's own dictionary, in the language card |
 | `$FFFA-$FFFF` | the CPU vectors, copied there from ROM |
 
 The kernel and the dictionary share one 32K region, so moving something from
@@ -526,13 +526,21 @@ in the same 32K the dictionary had to grow into. It now lives on the disk at
 fixed sectors and the kernel streams it a sector at a time into `$0D00` — see
 [Streaming the source](#streaming-the-source). That is worth 9.9K.
 
-The fill's seed stack and the two line buffers live above the catalog for the
-same reason: `CATBUF` is a page-aligned `$1000-$1FFF` but only sixty 36-byte
-records deep, so everything past `$186F` was going begging. Another 950 bytes.
+Everything past `$186F` — `CATBUF` is page-aligned but only sixty records
+deep — is a block of RAM the kernel image doesn't have to carry. The fill's
+seed stacks and the line buffers went there first; the hash buckets, the
+disk decode table, the numeric output buffer and the floating point stack
+followed, which is what brought `PICSAVE` back from 412 bytes short. One
+warning, learned the expensive way: **the map of that region lives in
+`src/kernel.inc` and nowhere else.** When two files each allocated from it
+independently, the decode table landed on the flood fill's seed stack, and a
+flood fill would have quietly destroyed every disk read until the next boot
+— while the whole test suite stayed green, because no test happened to fill
+and then read.
 
-**A fresh boot now leaves 18,205 bytes free**, against 1,167 at the start of
-the day: the source moved to the disk and the system's own dictionary moved
-to the language card.
+**A fresh boot now leaves 16,458 bytes free.** The system's dictionary in
+the language card is the scarcer resource these days: it reaches `$FD3F` of
+a `$FFF9` ceiling, so about 700 bytes remain for the system to grow into.
 
 Zero page: `$00-$4F` is left alone — the monitor's text window state and the
 80-column firmware's own variables live there, and the console calls both on

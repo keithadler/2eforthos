@@ -23,13 +23,9 @@
 FSMAX   = 250
 
 ; The three arrays live in the spare room above the catalog rather than in
-; the kernel.  CATBUF is a page-aligned $1000-$1FFF but only sixty 36-byte
-; records deep, so everything past $186F is going begging -- and every byte
-; the kernel does not spend here is a byte the dictionary gets, since the two
-; share $4000-$BFFF between them.
-FSXL    = $1900
-FSXH    = $1A00
-FSY     = $1B00
+; the kernel -- every byte the kernel does not spend is a byte the
+; dictionary gets.  FSXL, FSXH and FSY are defined in kernel.inc's map of
+; that region, with everything else that lives there.
 
 ; Test the pixel at (FX, FY).  A := 0 or 1.  HgrPoint takes its arguments in
 ; HX/HY, so this is a wrapper that keeps the fill's own coordinates separate

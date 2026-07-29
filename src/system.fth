@@ -133,19 +133,42 @@ VARIABLE FX1 VARIABLE FX2 VARIABLE FY1 VARIABLE FY2
 \ files out of twenty-nine, and the file commands laid one catalog sector
 \ over another.  Silently, in both cases.  So these return a flag, and the
 \ code below stops and says DISK ERROR rather than carrying on with rubbish.
+\
+\ And they retry with PATIENCE.  Back-to-back retries all land inside the
+\ same bad moment and burn out in milliseconds -- sixteen reads straight
+\ after sixteen writes (INIT reloading the catalog it just wrote) failed
+\ all four instant tries and worked seconds later.  A pause between tries
+\ is what DOS did too: RWTS retried forty-eight times with recalibration
+\ between groups.  Eight tries a tenth of a second apart outwaits anything
+\ observed, and costs nothing on the reads that succeed first time.
 VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
-4 CONSTANT DTRIES
+VARIABLE WROTE
+8 CONSTANT DTRIES
+: DPAUSE 5000 0 DO LOOP ;               \ about a quarter of a second
+\ What was measured, not deduced: a read shortly after a write cannot be
+\ trusted.  Some fail, and the retry catches those; some SUCCEED WITH THE
+\ SECTOR'S OLD CONTENTS, and nothing downstream can catch that -- INIT
+\ wrote an empty catalog, read it straight back, and got the twenty-eight
+\ files it had just erased.  Waiting helps but the safe interval is seconds
+\ long.  Moving the head is better: stepping away and back forces the
+\ written track out of the drive's hands, the way DOS's recalibrate-
+\ between-retries did, and costs a fraction of a second.  Writes
+\ themselves never mind -- sixteen go down back to back without complaint
+\ -- so only the first read after writing pays.
+: DSETTLE WROTE @ IF 0 DSEEK DPAUSE 0 WROTE ! THEN ;
 : RD ( t s addr -- ok )
-  RDA ! RDS ! RDT !
+  RDA ! RDS ! RDT ! DSETTLE
   DTRIES 0 DO
     RDT @ RDS @ RDA @ DREAD DUP DERR !
     0= IF -1 UNLOOP EXIT THEN
+    DPAUSE
   LOOP 0 ;
 : WR ( t s addr -- ok )
   RDA ! RDS ! RDT !
   DTRIES 0 DO
     RDT @ RDS @ RDA @ DWRITE DUP DERR !
-    0= IF -1 UNLOOP EXIT THEN
+    0= IF -1 -1 WROTE ! UNLOOP EXIT THEN
+    DPAUSE
   LOOP 0 ;
 : DISKERR ." DISK ERROR " DERR @ . CR ;
 
@@ -309,15 +332,25 @@ VARIABLE QT VARIABLE QS VARIABLE QB
 \ Track 0 is the boot loader and 1 and 2 are the kernel; 17 is the catalog
 \ and is already marked used.  Searching from 3 keeps a new file off the
 \ tracks the machine needs to start at all, whatever the bitmap says.
-VARIABLE ALT VARIABLE ALS
-: ALLOC ( -- t s )
+\
+\ NEXTT remembers where the last allocation landed, and the search resumes
+\ there -- the same trick DOS used.  Without it every sector of a file
+\ re-walked all the reserved tracks bit by bit in interpreted Forth, and a
+\ sixty-five sector picture spent most of a minute allocating rather than
+\ writing.  If nothing is free from NEXTT on, one full scan from 3 catches
+\ whatever a deletion has given back.
+VARIABLE ALT VARIABLE ALS VARIABLE NEXTT  3 NEXTT !
+: (ALLOC) ( from -- )
   -1 ALT !
-  35 3 DO
-    ALT @ 0< IF
-      16 0 DO J I SFREE? IF J ALT ! I ALS ! LEAVE THEN LOOP
-    THEN
-  LOOP
+  35 SWAP DO
+    16 0 DO J I SFREE? IF J ALT ! I ALS ! LEAVE THEN LOOP
+    ALT @ 0< 0= IF LEAVE THEN
+  LOOP ;
+: ALLOC ( -- t s )
+  NEXTT @ (ALLOC)
+  ALT @ 0< IF 3 (ALLOC) THEN
   ALT @ 0< IF -1 -1 EXIT THEN
+  ALT @ NEXTT !
   ALT @ ALS @ 2DUP STAKE ;
 
 \ The track/sector list: bytes 1 and 2 point at the next list sector, and
@@ -763,11 +796,12 @@ VARIABLE GLA VARIABLE GLB
 \ banks only moves $2000-$3FFF, so the staging area and the code doing the
 \ copying stay put either way.
 \
-\ That wants sixteen kilobytes free, and the kernel has grown enough today
-\ that a fresh boot no longer has them -- so PICROOM checks and says so.
-\ Writing the file from the two halves in place would need the file writer
-\ to take two regions, which it does not; until it does, this is honest
-\ rather than working.
+\ That wants sixteen kilobytes free.  For a while the kernel had grown past
+\ leaving them and this word could only refuse politely; the room came back
+\ when the uninitialized buffers moved out of the image to the block above
+\ the catalog (kernel.inc).  PICROOM stays as the guard: the margin is a
+\ few dozen bytes, and the day the kernel grows past it again this refuses
+\ honestly instead of writing into the I/O page at $C000.
 $4000 CONSTANT PICLEN
 : PICROOM ( -- ok )
   UNUSED PICLEN < IF
