@@ -32,7 +32,14 @@ DISKFILES := $(wildcard disk/*) $(wildcard examples/*.FTH)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/srcsecs.inc
-BOOT1   := build/boot1.bin
+# The boot loader is sized for the kernel it loads, so both it and the sector
+# count it embeds are named after PROG.  They used to be shared, which meant
+# that building anything else -- `make run PROG=hirestest` to check the
+# standalone driver test, say -- left a boot loader behind that reads the
+# wrong number of sectors, and the next build of the real disk picked it up
+# and booted to the monitor.
+BOOTDIR := build/$(PROG)
+BOOT1   := build/$(PROG)-boot1.bin
 OBJS    := $(patsubst $(SRCDIR)/%.s,build/%.o,$(SRCS))
 BIN     := build/$(PROG).bin
 DSK     := build/$(PROG).dsk
@@ -109,14 +116,15 @@ build/%.o: $(SRCDIR)/%.s $(INCS) $(GENERATED) src/apple2.cfg | build
 
 # The boot loader replaces DOS entirely.  It has to know how big the kernel
 # is, so that comes from the linked binary.
-build/kernsecs.inc: $(BIN) | build
+$(BOOTDIR)/kernsecs.inc: $(BIN) | build
+	@mkdir -p $(BOOTDIR)
 	@printf 'KERNSECS = %s\nKERNILEAVE = %s\n' \
 	  $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) '$(ILEAVE)' > $@
 	@echo "kernel is $$(( ($$(wc -c < $(BIN)) + 255) / 256 )) sectors, interleave $(ILEAVE)"
 
-$(BOOT1): boot/boot1.s build/kernsecs.inc src/d2core.inc src/apple2.cfg | build
-	ca65 -g -I src -I build boot/boot1.s -o build/boot1.o
-	ld65 -C src/apple2.cfg -S 0x0800 -o $@ build/boot1.o
+$(BOOT1): boot/boot1.s $(BOOTDIR)/kernsecs.inc src/d2core.inc src/apple2.cfg | build
+	ca65 -g -I src -I $(BOOTDIR) -I build boot/boot1.s -o $(BOOTDIR)/boot1.o
+	ld65 -C src/apple2.cfg -S 0x0800 -o $@ $(BOOTDIR)/boot1.o
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at 0x0800"
 
 $(BIN): $(OBJS) src/apple2.cfg
