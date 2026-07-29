@@ -111,7 +111,7 @@ $(BIN): $(OBJS) src/apple2.cfg
 
 disk: $(DSK)
 
-$(DSK): $(BIN) $(BOOT1)
+$(DSK): $(BIN) $(BOOT1) $(DISKFILES) src/system.fth
 	@rm -f $@
 	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth

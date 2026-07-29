@@ -1,0 +1,494 @@
+# The 2E Forth OS language
+
+310 words. This is the whole reference; `HELP` on the machine prints a
+condensed version of it.
+
+Notation is the usual Forth stack comment, `( before -- after )`, with the top
+of the stack on the right. `n` is a signed cell, `u` unsigned, `d` a
+double-cell (two cells, low pushed first, so the high cell is the one on
+top), `addr` an address, `c` a character, `flag` is `0` for false and `-1`
+for true.
+
+A cell is two bytes. A character is one. Nothing needs alignment on a 6502,
+so `ALIGN` and `ALIGNED` are here to be spelled rather than to act.
+
+---
+
+## Contents
+
+- [Numbers and the interpreter](#numbers-and-the-interpreter)
+- [Stack](#stack)
+- [Return stack](#return-stack)
+- [Arithmetic](#arithmetic)
+- [Mixed and double precision](#mixed-and-double-precision)
+- [Logic and comparison](#logic-and-comparison)
+- [Memory](#memory)
+- [Defining words](#defining-words)
+- [Compiling](#compiling)
+- [Control flow](#control-flow)
+- [Text and numbers out](#text-and-numbers-out)
+- [Input](#input)
+- [The graphics screen](#the-graphics-screen)
+- [Text on the graphics screen](#text-on-the-graphics-screen)
+- [Sound and timing](#sound-and-timing)
+- [The disk](#the-disk)
+- [Files](#files)
+- [System variables and internals](#system-variables-and-internals)
+
+---
+
+## Numbers and the interpreter
+
+Numbers are read in `BASE`, which starts at 10. A leading `$` reads hex
+whatever `BASE` says, so `$C030` always means what it looks like. A leading
+`-` negates.
+
+Input is folded to upper case as it is read, because every name in the
+dictionary is upper case. That also means a string typed at the prompt
+arrives in upper case; strings *compiled* from a loaded file keep their case,
+since a file is not folded.
+
+The interpreter reads a word, looks it up, and either runs it or compiles it
+depending on `STATE`. A word it cannot find it tries to read as a number; if
+that fails too it echoes the word with a `?` and abandons the line.
+
+The data stack holds 40 cells. A line that pops more than it pushes is caught
+at the end of the line — `STACK?` — rather than being left to run wild.
+
+---
+
+## Stack
+
+| Word | Effect | |
+|---|---|---|
+| `DUP` | `( x -- x x )` | |
+| `?DUP` | `( x -- 0 \| x x )` | duplicates only if non-zero |
+| `DROP` | `( x -- )` | |
+| `SWAP` | `( x1 x2 -- x2 x1 )` | |
+| `OVER` | `( x1 x2 -- x1 x2 x1 )` | |
+| `TUCK` | `( x1 x2 -- x2 x1 x2 )` | |
+| `NIP` | `( x1 x2 -- x2 )` | |
+| `ROT` | `( x1 x2 x3 -- x2 x3 x1 )` | |
+| `-ROT` | `( x1 x2 x3 -- x3 x1 x2 )` | |
+| `2DUP` | `( x1 x2 -- x1 x2 x1 x2 )` | |
+| `2DROP` | `( x1 x2 -- )` | |
+| `2SWAP` | `( x1 x2 x3 x4 -- x3 x4 x1 x2 )` | |
+| `2OVER` | `( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )` | |
+| `PICK` | `( xu..x0 u -- xu..x0 xu )` | `0 PICK` is `DUP` |
+| `ROLL` | `( xu..x0 u -- xu-1..x0 xu )` | `2 ROLL` is `ROT` |
+| `DEPTH` | `( -- u )` | cells on the stack before the push |
+
+`PICK` and `ROLL` reach a cell whose depth is not known until run time. The
+stack is in zero page and indexed by X, so a cell's address is a single byte
+— which means it fits in Y and can be reached with absolute indexed
+addressing into page zero. That is the only way to do it.
+
+## Return stack
+
+| Word | Effect |
+|---|---|
+| `>R` | `( x -- )` `( R: -- x )` |
+| `R>` | `( -- x )` `( R: x -- )` |
+| `R@` | `( -- x )` copy, leaves it on the return stack |
+| `2>R` | `( x1 x2 -- )` `( R: -- x1 x2 )` |
+| `2R>` | `( -- x1 x2 )` |
+| `2R@` | `( -- x1 x2 )` copy |
+
+The return stack is the 6502's own. Anything pushed must be taken back before
+the word ends, or the word will return into it. That is also why these are
+primitives and not colon definitions: entering a colon definition pushes the
+caller's address onto the same stack.
+
+## Arithmetic
+
+| Word | Effect | |
+|---|---|---|
+| `+` `-` `*` | `( n1 n2 -- n3 )` | |
+| `1+` `1-` | `( n -- n' )` | |
+| `2*` `2/` | `( n -- n' )` | shifts; `2/` is arithmetic |
+| `NEGATE` | `( n -- -n )` | |
+| `ABS` | `( n -- \|n\| )` | |
+| `MIN` `MAX` | `( n1 n2 -- n3 )` | signed |
+| `/` | `( n1 n2 -- n3 )` | **floored** |
+| `MOD` | `( n1 n2 -- n3 )` | remainder takes the divisor's sign |
+| `/MOD` | `( n1 n2 -- rem quot )` | |
+| `*/` | `( n1 n2 n3 -- n4 )` | `n1*n2/n3` with a 32-bit intermediate |
+| `*/MOD` | `( n1 n2 n3 -- rem quot )` | |
+| `LSHIFT` `RSHIFT` | `( x u -- x' )` | logical; 16 or more gives zero |
+| `U/MOD` | `( u1 u2 -- rem quot )` | unsigned, 16 by 16 |
+
+**Division is floored**: the quotient rounds toward negative infinity and the
+remainder takes the sign of the divisor. `-10 3 /MOD` gives `2 -4`.
+`SM/REM` truncates toward zero instead and gives `-1 -3`; it is there when
+that is what you want.
+
+`*/` exists because `n1*n2` often overflows a cell when `n1*n2/n3` does not.
+Scaling a coordinate by 17/8 is `17 8 */`, not `17 * 8 /`.
+
+## Mixed and double precision
+
+A double is two cells, low pushed first, so the high cell is the one on top.
+
+| Word | Effect | |
+|---|---|---|
+| `UM*` | `( u1 u2 -- ud )` | 16 by 16 giving 32, unsigned |
+| `UM/MOD` | `( ud u -- rem quot )` | 32 by 16 giving 16, unsigned |
+| `M*` | `( n1 n2 -- d )` | signed |
+| `SM/REM` | `( d n -- rem quot )` | truncates toward zero |
+| `FM/MOD` | `( d n -- rem quot )` | floors toward negative infinity |
+| `S>D` | `( n -- d )` | sign-extend |
+| `D+` `D-` | `( d1 d2 -- d3 )` | |
+| `DNEGATE` `DABS` | `( d -- d' )` | |
+| `UD/MOD` | `( ud u -- rem ud' )` | used by `#` |
+
+`UM*` and `UM/MOD` are the two primitives everything else is built on.
+Everything signed is those two with the signs taken off first and put back
+afterwards, because sign fixing is cheap and unsigned arithmetic is not.
+
+## Logic and comparison
+
+| Word | Effect | |
+|---|---|---|
+| `AND` `OR` `XOR` | `( x1 x2 -- x3 )` | bitwise |
+| `INVERT` | `( x -- x' )` | one's complement |
+| `=` `<>` | `( x1 x2 -- flag )` | |
+| `<` `>` | `( n1 n2 -- flag )` | signed |
+| `U<` `U>` | `( u1 u2 -- flag )` | unsigned |
+| `0=` `0<>` `0<` `0>` | `( n -- flag )` | |
+| `WITHIN` | `( n lo hi -- flag )` | `lo <= n < hi` |
+
+**Addresses above `$7FFF` are negative as cells.** Comparing them with `<`
+gets the wrong answer; use `U<`. This is not a theoretical concern — it was a
+real bug here, and it hid for a while because the dictionary happens to live
+above `$8000` too.
+
+## Memory
+
+| Word | Effect | |
+|---|---|---|
+| `@` `!` | `( addr -- x )` / `( x addr -- )` | cell |
+| `C@` `C!` | `( addr -- c )` / `( c addr -- )` | byte |
+| `+!` | `( n addr -- )` | add to a cell |
+| `2@` `2!` | `( addr -- d )` / `( d addr -- )` | |
+| `CMOVE` | `( src dst u -- )` | forward, `u <= 255` |
+| `MOVE` | `( src dst u -- )` | any length, handles overlap |
+| `FILL` | `( addr u c -- )` | |
+| `ERASE` `BLANK` | `( addr u -- )` | fill with 0 / with a space |
+| `COUNT` | `( addr -- addr+1 u )` | unpack a counted string |
+| `HERE` | `( -- addr )` | next free dictionary byte |
+| `ALLOT` | `( n -- )` | move `HERE` |
+| `,` `C,` | `( x -- )` / `( c -- )` | append and move `HERE` |
+| `CELL+` `CELLS` | `( n -- n' )` | `+2`, `*2` |
+| `CHAR+` `CHARS` | `( n -- n' )` | `+1`, nothing |
+| `ALIGN` `ALIGNED` | | nothing, on a 6502 |
+| `>BODY` | `( xt -- addr )` | past the `JSR` in a code field |
+
+`MOVE` copies in whichever direction reads a byte before it is written over:
+upward when the destination is below the source, downward when it is above.
+
+## Defining words
+
+| Word | |
+|---|---|
+| `: NAME ... ;` | a new word |
+| `VARIABLE NAME` | a cell; the word pushes its address |
+| `CONSTANT NAME` | `( x -- )` at definition; the word pushes `x` |
+| `CREATE NAME` | a word that pushes the address of what follows it |
+| `DOES> ...` | says what the words a defining word makes should do |
+| `IMMEDIATE` | marks the last definition to run while compiling |
+| `'` | `( -- xt )` looks up the next word |
+| `FORGET NAME` | throws away `NAME` and everything after it |
+
+`CREATE ... DOES>` is how the language grows:
+
+```forth
+: ARRAY CREATE CELLS ALLOT DOES> SWAP CELLS + ;
+10 ARRAY SQUARES
+```
+
+`ARRAY` now makes words. `CREATE` lays down the space at definition time, and
+everything after `DOES>` is what `SQUARES` does when it runs: it is handed
+the address of its own data, and the index is underneath.
+
+`FORGET` sets `HERE` back to the header and rebuilds the hash buckets from
+scratch, which is cheaper than unpicking sixteen chains by hand. It is the
+way to reclaim space after trying something out — the demos on the disk each
+define a marker for exactly that.
+
+## Compiling
+
+| Word | |
+|---|---|
+| `[` `]` | leave and re-enter compiling |
+| `LITERAL` | `( x -- )` compile `x` as a literal |
+| `[']` | compile the next word's execution token as a literal |
+| `COMPILE,` | `( xt -- )` compile a call |
+| `POSTPONE` | compile the next word's *compilation* behaviour |
+| `[CHAR]` | compile the next word's first character |
+| `CHAR` | `( -- c )` the next word's first character, now |
+| `RECURSE` | compile a call to the definition being defined |
+| `(` `... )` | comment, to the closing bracket |
+| `\` | comment, to the end of the line |
+
+`[ ... ]` computes at compile time: `: SIX [ 2 3 * ] LITERAL ;` puts a 6 in
+the definition rather than a multiply.
+
+`POSTPONE` handles both cases: an immediate word is compiled so that it runs
+later, an ordinary one is compiled as code that will compile it later. That
+is what `CASE` and friends are built from.
+
+## Control flow
+
+| Word | |
+|---|---|
+| `IF ... THEN`, `IF ... ELSE ... THEN` | `( flag -- )` |
+| `BEGIN ... UNTIL` | `( flag -- )` loops while false |
+| `BEGIN ... AGAIN` | forever |
+| `BEGIN ... WHILE ... REPEAT` | `( flag -- )` at the `WHILE` |
+| `DO ... LOOP` | `( limit start -- )` |
+| `?DO ... LOOP` | the same, but skips entirely if they are equal |
+| `... +LOOP` | `( n -- )` step by `n`, either sign |
+| `I` `J` | the loop index, and the next loop out |
+| `LEAVE` | jump past the `LOOP` |
+| `UNLOOP` | discard the loop's parameters before `EXIT` |
+| `EXIT` | return from a definition |
+| `EXECUTE` | `( xt -- )` run an execution token |
+| `CASE ... OF ... ENDOF ... ENDCASE` | |
+| `ABORT` | clear the stack and return to the prompt |
+| `ABORT" ..."` | `( flag -- )` if true, print and abort |
+
+`DO ... LOOP` always runs at least once, which is the traditional behaviour
+and a trap: `0 0 DO` runs 65536 times. `?DO` is the one that checks first,
+and is what a loop over a possibly-empty count wants.
+
+`+LOOP` stops when the index crosses the boundary between `limit-1` and
+`limit`. Comparing the index against the limit cannot see that on its own;
+the test is whether `index - limit` changed sign, which works for a step of
+either direction.
+
+`LEAVE` and `?DO` compile forward branches that `LOOP` resolves. The compiler
+keeps them on a stack of their own, and `DO` records how deep it was, so a
+`LEAVE` in an inner loop cannot escape the wrong one.
+
+## Text and numbers out
+
+| Word | Effect | |
+|---|---|---|
+| `EMIT` | `( c -- )` | |
+| `CR` | | |
+| `SPACE` `SPACES` | `( -- )` / `( u -- )` | |
+| `PAGE` | | clear the screen |
+| `TYPE` | `( addr u -- )` | |
+| `-TRAILING` | `( addr u -- addr u' )` | drop trailing spaces |
+| `." ..."` | | print, compiling or not |
+| `S" ..."` | `( -- addr u )` | |
+| `C" ..."` | `( -- addr )` | counted string |
+| `.` | `( n -- )` | signed |
+| `U.` | `( u -- )` | unsigned |
+| `.R` `U.R` | `( n u -- )` | right-justified in `u` columns |
+| `D.` | `( d -- )` | |
+| `?` | `( addr -- )` | print what is there |
+| `.S` | | print the stack without disturbing it |
+
+Pictured numeric output, for anything the above does not cover:
+
+| Word | Effect | |
+|---|---|---|
+| `<#` | | start |
+| `#` | `( ud -- ud' )` | one digit, in `BASE` |
+| `#S` | `( ud -- 0 0 )` | the rest of them |
+| `HOLD` | `( c -- )` | insert a character |
+| `SIGN` | `( n -- )` | a minus if `n` is negative |
+| `#>` | `( ud -- addr u )` | finish |
+
+Digits come out least significant first, so they are laid down backwards into
+a buffer and the string is whatever is left between the pointer and the end.
+`U.` is `0 <# #S #> TYPE SPACE`.
+
+## Input
+
+| Word | Effect | |
+|---|---|---|
+| `KEY` | `( -- c )` | wait for a key |
+| `KEY?` | `( -- flag )` | is one waiting, without taking it |
+| `KEYC` | `( -- c )` | take the waiting key |
+| `ASKLN` | `( -- addr u )` | read a line |
+| `BTN` | `( -- flag )` | game port button 0 |
+| `PADDLE` | `( n -- u )` | game port channel `n`, 0..255 |
+
+`PADDLE` waits out the game port's timer afterwards. It returns the moment
+its capacitor has discharged, so a small reading returns early and leaves the
+shared timer still charged — and the next channel then reads back skewed by
+the first.
+
+## The graphics screen
+
+560 by 192, monochrome, one bit per pixel. `HGR` turns it on and `TEXT`
+brings the console back.
+
+| Word | Effect | |
+|---|---|---|
+| `HGR` | | graphics on, cleared |
+| `TEXT` | | back to the 80-column console |
+| `HCLS` | | clear |
+| `HCOLOR` | `( n -- )` | 0 black, 3 white, the rest dithers |
+| `HXOR` | `( flag -- )` | draw by XOR |
+| `HPLOT` | `( x y -- )` | |
+| `HPOINT` | `( x y -- flag )` | read a pixel back |
+| `HLINE` | `( x1 x2 y -- )` | horizontal |
+| `HVLINE` | `( x y1 y2 -- )` | vertical |
+| `HLINE2` | `( x1 y1 x2 y2 -- )` | any slope |
+| `HBOX` | `( x1 x2 y1 y2 -- )` | filled |
+| `HFRAME` | `( x1 x2 y1 y2 -- )` | outline |
+| `HCIRCLE` | `( x y r -- )` | outline |
+| `HDISC` | `( x y r -- )` | filled |
+| `HFILL` | `( x y -- )` | flood |
+| `BLIT` | `( addr w h x y -- )` | bitmap |
+| `AUXBANK` `MAINBANK` | | which half of the screen the CPU sees |
+
+Coordinates are clamped, not wrapped: an `x` of 600 draws at 559.
+
+**`HXOR`** makes every drawing word exclusive-or what it draws instead of
+replacing it, so drawing the same thing twice leaves the screen as it was
+found. That is how the demos animate without saving any background.
+
+**`HFILL`** fills the connected region of pixels *matching the seed* with the
+opposite value. Defining it that way rather than "fill with `HCOLOR`" is what
+makes it terminate — a dithered pattern leaves some of the pixels it writes
+still matching the seed, and those seed the fill again for as long as you
+care to wait. Filling with black is the same word with the seed on a white
+region. It fills by scanlines, but the scanning either side of a run is still
+per pixel, so a very large area takes seconds.
+
+**`BLIT`** takes rows of whole bytes, eight pixels each, bit 0 leftmost. A
+set bit plots in the current colour and a clear bit leaves the screen alone,
+so a shape needs no mask and no rectangle of background around it. Build one
+with `CREATE` and `C,`:
+
+```forth
+CREATE BALL $3C C, $7E C, $FF C, $FF C, $FF C, $FF C, $7E C, $3C C,
+BALL 8 8 100 50 BLIT
+```
+
+The screen is half in each memory bank — even byte columns in auxiliary
+memory, odd ones in main — so saving one to disk is two saves with
+`AUXBANK` and `MAINBANK` between them. Nothing may print while auxiliary is
+selected: with `80STORE` set for the console, the same switch moves the text
+screen.
+
+## Text on the graphics screen
+
+| Word | Effect | |
+|---|---|---|
+| `TAT` | `( col row -- )` | 80 by 24 grid |
+| `TEMIT` | `( c -- )` | |
+| `TINV` | `( flag -- )` | inverse video |
+| `T." ..."` | | print, compiling or not |
+
+## Sound and timing
+
+| Word | Effect | |
+|---|---|---|
+| `CLICK` | | one movement of the speaker cone |
+| `TONE` | `( delay cycles -- )` | a square wave |
+| `MS` | `( u -- )` | wait, roughly |
+| `VBL` | | wait for the video counter to change |
+
+The speaker is one soft switch: reading it moves the cone one way, and
+reading it again moves it back. A tone is that pair of reads repeated at the
+pitch you want, so `TONE` sits in a delay loop for the whole note — there is
+no timer to hand it off to. A bigger delay is a lower note; dividing a
+constant by the delay keeps every note the same length:
+
+```forth
+: NOTE ( delay -- ) DUP 30000 SWAP / TONE ;
+```
+
+Nor is there a clock. What there is is the video counter, which changes state
+once per frame, so `VBL` is a sixtieth of a second measured by the same
+crystal that drives everything else. `MS` is a counted loop and is only as
+accurate as the 1.023 MHz it assumes.
+
+## The disk
+
+| Word | Effect | |
+|---|---|---|
+| `DREAD` | `( t s addr -- err )` | read one sector |
+| `DWRITE` | `( t s addr -- err )` | write one |
+| `DSEEK` | `( t -- )` | move the head |
+| `DRECAL` | | back to track 0 |
+| `DSTEP` `DHALF` `DADDR` `DBYTES` | | the pieces underneath |
+
+Sector numbers are DOS's, not the order they are written in — physical sector
+*P* of a track holds DOS sector `0,7,14,6,13,5,12,4,11,3,10,2,9,1,8,15`.
+`DREAD` and `DWRITE` translate. Sectors 0 and 15 are the two fixed points of
+that permutation, which is why a missing translation can hide for a long
+time: the VTOC is sector 0 and the first catalog sector is 15.
+
+## Files
+
+| Word | Effect | |
+|---|---|---|
+| `CAT` | | list the disk |
+| `FREE` | `( -- u )` | free sectors |
+| `LOCK` | `( n -- )` | toggle the lock on a file |
+| `DEL` | `( n -- )` | delete one; locked files are refused |
+| `REN` | `( n -- )` | rename one, asking for the name |
+| `LOAD` | `( n -- )` | interpret a text file as Forth |
+| `SAVE` | `( addr len -- )` | write a text file, asking for the name |
+| `BSAVE` | `( addr len -- )` | the same as a binary file |
+| `BLOAD` | `( n addr -- len )` | read one back |
+
+`n` is the number `CAT` prints. An index outside the catalog is refused
+rather than trusted, because every one of these writes to the disk.
+
+`LOAD` reads the text onto hi-res page 1 and points the interpreter's source
+pointer at it, so it costs no dictionary at all — which matters, because the
+definitions the file makes have to fit somewhere. Turning the graphics screen
+on while a file is still being read overwrites what is left of it. One file
+at a time: a load inside a load would move the ground under the first.
+
+`SAVE` and `BSAVE` create a real DOS 3.3 file: sectors marked used in the
+VTOC, a track/sector list naming them, the data, and a catalog entry pointing
+at the list. Nothing is written until all four are ready except the data
+sectors, which are harmless on their own — an interrupted save leaks sectors
+rather than corrupting the catalog. `BSAVE` writes DOS's four-byte header
+(load address, then length) and `BLOAD` steps it back off and returns the
+length.
+
+The round trip, from the console:
+
+```forth
+S" : HELLO 1234 ;" SAVE
+```
+
+It asks for a name; `CAT` then shows it, and `n LOAD` reads it back and
+defines `HELLO`.
+
+## System variables and internals
+
+| Word | |
+|---|---|
+| `STATE` | 0 interpreting, 1 compiling |
+| `BASE` | number base, 10 at boot |
+| `DP` | the dictionary pointer; `HERE` is `DP @` |
+| `LATEST` | the most recent header |
+| `NFILE` `NFREE` | files in the catalog, free sectors |
+| `SECBUF` `VTOCBUF` `TSBUF` `CATBUF` | the disk buffers |
+| `WORDS` | list every definition |
+| `BYE` | stop |
+
+This Forth has a single wordlist, so `WORDS` also prints about ninety names
+that are the system's own working parts — the file writer's variables, the
+catalog helpers, and the compiler's runtime halves (`LIT`, `BRANCH`, `(DO)`,
+`(.")`). They are visible because there is nowhere to hide them, not because
+they are meant to be called.
+
+---
+
+## What is not here
+
+- No `EVALUATE`, and no nested input sources.
+- No vocabularies or wordlists.
+- No `BLOCK`/`LIST`; `LOAD` covers the need differently.
+- No floating point, and there will not be any.

@@ -34,7 +34,7 @@ ROW96 = 0x2228
 TESTS = {
 
 "boot": """
-    check NFILE 6
+    check NFILE 12
     depth 0
 """,
 
@@ -115,9 +115,9 @@ TESTS = {
 
 # The catalog is read from the disk at boot, not compiled in.
 "catalog": """
-    check NFILE 6
+    check NFILE 12
     type NFILE @
-    stack 6
+    stack 12
     clear
     type FREE
     wait 240
@@ -400,11 +400,11 @@ TESTS = {
 
 # SYSTEM.FTH is on the disk as text; loading it recompiles the whole system
 # over itself, which is the strongest test of LOAD there is.
-# TEST.FTH is entry 5 in the catalog: definitions, a variable, and a
+# TEST.FTH is entry 11 in the catalog: definitions, a variable, and a
 # CREATE ... DOES> array, all of which have to survive being read off a
 # floppy a sector at a time.
 "load": """
-    type 5 LOAD
+    type 11 LOAD
     wait 600
     clear
     check LOADED -1
@@ -517,9 +517,9 @@ TESTS = {
     type S" : NEWWORD 4242 ;" SAVE
     type SAVED.FTH
     wait 900
-    check NFILE 7
+    check NFILE 13
     clear
-    type 6 LOAD
+    type 12 LOAD
     wait 900
     clear
     type NEWWORD
@@ -534,11 +534,11 @@ TESTS = {
     type $0D00 16 BSAVE
     type BLOB
     wait 900
-    check NFILE 7
+    check NFILE 13
     clear
     type $0E00 16 0 FILL
     clear
-    type 6 $0E00 BLOAD
+    type 12 $0E00 BLOAD
     wait 600
     stack 16
     mem 0E00 90
@@ -597,6 +597,87 @@ TESTS = {
     wait 120
     nonzero 2000 8000
     type TEXT
+    depth 0
+""",
+
+# Each demo has to load inside the dictionary that is left and run without
+# leaving anything on the stack.  They are listed here in catalog order.
+"demo-gfx": """
+    type 3 LOAD
+    wait 1200
+    clear
+    type GFX
+    wait 3600
+    nonzero 2000 8000
+    type TEXT
+    depth 0
+""",
+
+"demo-moire": """
+    type 7 LOAD
+    wait 1200
+    clear
+    type BANDS
+    wait 900
+    nonzero 2000 8000
+    type MOIRE
+    wait 3600
+    nonzero 2000 8000
+    type TEXT
+    depth 0
+""",
+
+"demo-bounce": """
+    type 1 LOAD
+    wait 1200
+    clear
+    type 0 BX ! 0 BY ! 7 DX ! 3 DY ! STEP
+    depth 0
+    type BX @ BY @
+    stack 3 7
+    clear
+    type TEXT
+    depth 0
+""",
+
+"demo-primes": """
+    type 8 LOAD
+    wait 1200
+    clear
+    type 97 PRIME?
+    stack -1
+    clear
+    type 91 PRIME?
+    stack 0
+    clear
+    type 2 PRIME? 9 PRIME?
+    stack 0 -1
+    clear
+    type PRIMES
+    wait 1200
+    depth 0
+""",
+
+"demo-lang": """
+    type 5 LOAD
+    wait 1200
+    clear
+    type FILLSQ 7 SQUARES @
+    stack 49
+    clear
+    type DEMO
+    wait 600
+    depth 0
+""",
+
+"demo-sound": """
+    type 10 LOAD
+    wait 1200
+    clear
+    type 120 NOTE
+    depth 0
+    type CHIRP
+    wait 900
     depth 0
 """,
 
