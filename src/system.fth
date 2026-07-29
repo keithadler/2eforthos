@@ -454,6 +454,29 @@ VARIABLE FRA VARIABLE FRN VARIABLE FRG
     1 FRG +!
   LOOP FRG @ ;
 
+\ A line rather than a byte.  Reads up to a carriage return, strips the high
+\ bit DOS stores text with, and says how many characters and whether the file
+\ ran out.  This is what PRINT# and INPUT# were for, and what makes a text
+\ file worth interchanging with anything else.
+VARIABLE DGA VARIABLE DGN VARIABLE DGC VARIABLE DGE
+: DFGETS ( addr n -- got eof )
+  DGN ! DGA ! 0 DGC ! 0 DGE !
+  BEGIN
+    FGETC DUP 0< IF DROP -1 DGE ! -1 ELSE
+      127 AND
+      DUP 13 = IF DROP -1 ELSE
+        DUP 0= IF DROP -1 DGE ! -1 ELSE
+          DGC @ DGN @ < IF DGA @ DGC @ + C! 1 DGC +! ELSE DROP THEN
+          0
+        THEN
+      THEN
+    THEN
+  UNTIL
+  DGC @ DGE @ ;
+
+\ RND on its own is a whole 16-bit range; this is the one anyone wants.
+: RND-RANGE ( lo hi -- n ) OVER - 1+ RND SWAP MOD + ;
+
 \ --- a fresh filesystem ----------------------------------------------------
 \ The disk must already be formatted: writing address fields needs a track
 \ writer this driver does not have, and DWRITE can only replace a sector that
