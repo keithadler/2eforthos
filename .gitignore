@@ -11,3 +11,6 @@ snap/
 # `make roms` rebuilds the whole set from AppleWin and apple2js,
 # verifying every CRC against what MAME expects.
 roms/
+
+# contest.py is imported by ad-hoc probe scripts, which leaves this behind
+__pycache__/

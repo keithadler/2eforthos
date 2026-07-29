@@ -16,6 +16,7 @@
 --   show VAR          print one without asserting
 --   mem ADDR VALUE    assert one byte of memory
 --   nonzero ADDR N    assert N bytes from ADDR are not all zero
+--   screen            print the 80-column text screen, to see what it said
 
 local LATESTV = tonumber(os.getenv("LATESTV") or "0")
 local READY   = tonumber(os.getenv("READYMAX") or "5400")
@@ -66,6 +67,64 @@ end
 
 local function w(a) return mem:read_u8(a) | (mem:read_u8(a+1) << 8) end
 local function signed(v) return v >= 0x8000 and v - 0x10000 or v end
+
+-- Read the 80-column text screen back as text.
+--
+-- Worth the trouble: every assertion here is against machine state, which is
+-- the right thing to assert on but tells you nothing about *why* a case
+-- failed.  The console has usually said exactly why -- NAME?, NOT FOUND, an
+-- I/O error -- and until now none of that was visible, which has cost this
+-- project more debugging time than any actual bug.
+--
+-- Eighty columns live in two banks: even columns in auxiliary memory, odd in
+-- main, one byte of each per screen position.  MAME exposes no share for the
+-- aux RAM, so the only way in is the soft switch the firmware itself uses.
+-- It is not RAMRD: with 80STORE on -- which is how the console runs -- RAMRD
+-- is ignored for $0400-$07FF and PAGE2 picks the bank instead, which is why
+-- reading through $C003 gives main memory twice and a screen of doubled
+-- letters.  $C055 banks aux in, $C054 puts main back.
+--
+-- 80STORE itself is left alone, because there is no way to read it back and
+-- guess wrong would leave the machine in a state it did not ask for.  In a
+-- mode that has turned it off -- GR does -- this reads main twice and the
+-- doubled text says so plainly.
+--
+-- Reads happen between frames with the CPU stopped, and main is restored
+-- before it runs again, so no instruction ever executes in the flipped state.
+local PAGE2ON, PAGE2OFF = 0xC055, 0xC054
+
+local function rowbase(r) return 0x400 + (r % 8) * 0x80 + (r // 8) * 0x28 end
+
+local function screen()
+    local main, aux = {}, {}
+    for r = 0, 23 do
+        local b = rowbase(r)
+        for c = 0, 39 do main[r * 40 + c] = mem:read_u8(b + c) end
+    end
+    mem:write_u8(PAGE2ON, 0)
+    for r = 0, 23 do
+        local b = rowbase(r)
+        for c = 0, 39 do aux[r * 40 + c] = mem:read_u8(b + c) end
+    end
+    mem:write_u8(PAGE2OFF, 0)
+
+    local lines = {}
+    for r = 0, 23 do
+        local s = ""
+        for c = 0, 39 do
+            -- The screen holds the character with its high bit set for
+            -- normal text; inverse and flashing use the low ranges, which
+            -- map onto the same glyph.
+            local a = aux[r * 40 + c] & 0x7F
+            local m = main[r * 40 + c] & 0x7F
+            if a < 0x20 then a = a + 0x40 end
+            if m < 0x20 then m = m + 0x40 end
+            s = s .. string.char(a) .. string.char(m)
+        end
+        lines[#lines+1] = s:gsub("%s+$", "")
+    end
+    return lines
+end
 
 -- Walk the definition chain the way FIND does.  A VARIABLE's code field is
 -- JSR DOVAR, so its cell is three bytes past the name.  This runs before the
@@ -169,6 +228,14 @@ local function run(step)
         timer = 2
     elseif op == "wait" then
         timer = tonumber(rest)
+    elseif op == "screen" then
+        -- Blank trailing rows are dropped: the console is usually near the
+        -- bottom and the empty half of the screen is noise.
+        local lines = screen()
+        while #lines > 0 and lines[#lines] == "" do table.remove(lines) end
+        print("     --- screen ---")
+        for _, l in ipairs(lines) do print("     |" .. l) end
+        timer = 2
     elseif op == "shot" then
         pcall(function() manager.machine.video:snapshot() end)
         timer = 2

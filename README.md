@@ -12,7 +12,7 @@ point borrowed from the ROM.
 ```bash
 make roms     # rebuild the Apple ROM set from AppleWin and apple2js (once)
 make gui      # boot it in a window
-make test     # 300+ assertions, headless, about two minutes
+make test     # 400+ assertions, headless, about seven minutes
 ```
 
 ---
@@ -146,15 +146,15 @@ verifies every CRC.
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `examples/*.FTH` | seventeen Forth programs, all put on the floppy by `make disk` |
+| `examples/*.FTH` | twenty-three Forth programs, all put on the floppy by `make disk` |
 | `disk/*` | the plain text files that also go on it |
 | `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
 | `examples/hello.s` | the original 31-byte hello world, from before any of this |
 | `tools/contest.py` | the console test suite — types Forth, checks machine state |
-| `tools/contest.lua` | the MAME side of it |
-| `tools/words.lua` | dumps the text screen, zero page, and dictionary state |
-| `tools/contest.lua` | types lines into the running Forth at a pace it can keep up with |
+| `tools/contest.lua` | the MAME side of it: types lines at a pace the machine can keep up with, and reads the screen back |
+| `tools/words.lua` | prints every name in the live dictionary |
+| `tools/mkdisk.py` | lays the boot loader, kernel and source at fixed sectors, and reserves them |
 | `tools/fetch-roms.py` | rebuilds the MAME ROM set from AppleWin and apple2js |
 | `tools/mkfont.py` | carves a 7x8 font out of the Apple character ROM |
 | `tools/mkboot.py` | converts `system.fth` into a byte table the kernel interprets |
@@ -445,7 +445,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `examples/*.FTH` | seventeen Forth programs on the floppy — six graphical demos and a commented tutorial set. |
+| `examples/*.FTH` | twenty-three Forth programs on the floppy — six graphical demos and a commented tutorial set. |
 
 Both assembly ones still build:
 
@@ -560,13 +560,24 @@ is what happens when that source runs out: instead of dropping to the
 keyboard it reads the next sector, and only drops to the keyboard when there
 are none left.
 
-Two things had to be got right, and neither was:
+Three things had to be got right, and none was:
 
 - **The tracks have to be reserved before the filesystem is filled**, not
   after. DOS puts a file wherever the VTOC says is free, and it said tracks
   8-10 were free, so laying the source there wrote over three files that
   were already on the disk. `mkdisk.py --reserve` now runs immediately after
   the disk is formatted.
+- **How many tracks to reserve has to be asked, not assumed.** The count was
+  a constant — tracks 0-10 — and the source grew past it: 70 sectors is
+  tracks 8 to *12*. Tracks 11 and 12 stayed marked free, the filesystem put
+  files on them, and the source was then laid straight over those files.
+  Nothing complained. The catalog still gave the file its full length, the
+  sectors still read back cleanly, and what came off them was a piece of
+  `system.fth` — so a file simply turned into something else somewhere in
+  its middle. `GFXLIB.FTH` was one of the two that landed there. Both the
+  reserving pass and the laying pass now call one function to work the
+  number out, and laying refuses if the VTOC disagrees with it. The same
+  question on the machine is the `SRCEND` word, which `INIT` uses.
 - **`mkdisk.py` took the interleave from `argv[4]` only when there were
   exactly five arguments.** Adding a sixth silently dropped the kernel to
   interleave 3 while the boot loader still read it at 5, which loads a
@@ -606,7 +617,7 @@ in `XSAV` before waiting for a line, so while the prompt is up the whole stack
 can be read out of zero page.
 
 ```bash
-make test                # everything: 38 tests, ~2 minutes
+make test                # everything: 118 cases, ~7 minutes
 make test T="arith xor"  # named tests
 python3 tools/contest.py --list
 ```
@@ -635,6 +646,16 @@ Three things about the harness were worth more than they cost:
   is the only RAM the system leaves alone. Anything above `$4000` is kernel
   or dictionary and moves as the system grows, which is how a working test
   started failing.
+- **Asserting on state tells you *that* a case failed, never *why*.** The
+  console had usually said why — `NAME?`, `NO SUCH FILE`, `DISK ERROR` — and
+  none of it was visible. The `screen` step prints the 80-column text back as
+  text, and found a disk-layout bug in one run that a stack assertion had
+  only ever reported as a wrong number. The switch is `PAGE2`, not `RAMRD`:
+  with 80STORE on — which is how the console runs — RAMRD is ignored for
+  `$0400-$07FF`, so reading through it gives main memory twice and a screen
+  of doubled letters.
+- **The count at the bottom does not say where to look.** A full run is
+  thousands of lines; `contest.py` prints the failing case *names* after it.
 
 ## The language card
 
@@ -690,7 +711,7 @@ chain in memory instead and prints the lot on one line, with a star on the
 immediate ones. It is what the coverage check in this repository runs on.
 
 ```bash
-LATESTV=$(grep -i ' latestv$' build/forth.lbl | awk '{print strtonum("0x"$2)}') \
+LATESTV=$(printf '%d' 0x$(awk '/\.LATESTV$/{print $2}' build/forth.lbl)) \
 SDL_VIDEODRIVER=dummy mame apple2ee -rompath ./roms -sl4 "" \
   -flop1 build/forth.dsk -skip_gameinfo -video none -sound none \
   -nothrottle -seconds_to_run 55 -autoboot_delay 0 \

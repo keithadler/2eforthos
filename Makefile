@@ -136,7 +136,7 @@ disk: $(DSK)
 $(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth
 	@rm -f $@
 	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
-	@python3 tools/mkdisk.py --reserve $@ 10
+	@python3 tools/mkdisk.py --reserve $@ build/bootsrc.bin
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
 	@for f in $(DISKFILES); do \
 	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
