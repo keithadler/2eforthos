@@ -364,6 +364,12 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
 : BSAVE ( addr len -- ) 4 WT ! 4 WHDRN !
   OVER WHDR ! DUP WHDR 2 + ! WRITEF ;
 
+\ The graphics screen is half in each bank, so saving one is two saves with
+\ the bank switched between them.  Nothing else may print while aux is
+\ selected: with 80STORE set the same switch moves the text screen.
+: AUXBANK $C055 C@ DROP ;
+: MAINBANK $C054 C@ DROP ;
+
 \ --- loading source from the disk -----------------------------------------
 \ The text goes on hi-res page 1: eight kilobytes that the dictionary cannot
 \ reach and that nothing else wants while source is being read.  Reading a
@@ -379,6 +385,9 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
 $CE CONSTANT 'SRC  $2000 CONSTANT LDBUF  $4000 CONSTANT LDTOP
 VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
 : LSECS ( t s -- ) LS ! LT !
+  MAINBANK              \ the buffer is on hi-res page 1, which follows PAGE2
+                        \ while 80STORE is set -- and the console's firmware
+                        \ moves PAGE2 every time it prints a character
   BEGIN LT @ WHILE
     LT @ LS @ TSBUF DREAD DROP
     122 0 DO TSBUF 12 + I 2* +
@@ -409,12 +418,6 @@ VARIABLE BLA
   FENTRY DUP C@ SWAP 1+ C@ LSECS
   BLA @ 2 + @
   BLA @ 4 + BLA @ ROT DUP >R MOVE R> ;
-
-\ The graphics screen is half in each bank, so saving one is two saves with
-\ the bank switched between them.  Nothing else may print while aux is
-\ selected: with 80STORE set the same switch moves the text screen.
-: AUXBANK $C055 C@ DROP ;
-: MAINBANK $C054 C@ DROP ;
 
 \ --- the greeting ----------------------------------------------------------
 : HELP

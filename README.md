@@ -414,21 +414,27 @@ the space back. With about 1.1K of dictionary free, it is one demo at a time.
 | `$0800-$0FFF` | one raw disk sector |
 | `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
+| `$0D00-$0DFF` | one sector of the system's own source, while booting |
 | `$1900-$1CBF` | fill seed stack and the two line buffers |
-| `$4000-$9E50` | the kernel |
-| `$9E51-$BFFF` | dictionary, growing upward |
+| `$4000-$77EB` | the kernel |
+| `$77EC-$BFFF` | dictionary, growing upward |
 
 The kernel and the dictionary share one 32K region, so moving something from
 one to the other gains nothing — the only wins are code that is smaller or
-RAM that is somewhere else. The fill's seed stack and the two line buffers
-therefore live above the catalog: `CATBUF` is a page-aligned `$1000-$1FFF`
-but only sixty 36-byte records deep, so everything past `$186F` was going
-begging. That is worth about 950 bytes of dictionary.
+RAM that is somewhere else.
 
-**A fresh boot leaves about 1.1K free.** That is enough to work in and not
-much more; the language is now large enough that it, rather than the kernel,
-is what fills the machine. The next real gain would have to come from the
-language card.
+The big one was the system's own source. `system.fth` used to be assembled
+into the image as a byte table: **nearly ten kilobytes of text**, read
+exactly once at cold start and then dead weight for the rest of the session,
+in the same 32K the dictionary had to grow into. It now lives on the disk at
+fixed sectors and the kernel streams it a sector at a time into `$0D00` — see
+[Streaming the source](#streaming-the-source). That is worth 9.9K.
+
+The fill's seed stack and the two line buffers live above the catalog for the
+same reason: `CATBUF` is a page-aligned `$1000-$1FFF` but only sixty 36-byte
+records deep, so everything past `$186F` was going begging. Another 950 bytes.
+
+**A fresh boot now leaves about 11K free**, against 1.1K before.
 
 Zero page: `$00-$4F` is left alone — the monitor's text window state and the
 80-column firmware's own variables live there, and the console calls both on
@@ -438,6 +444,36 @@ deliberate gap** — the deepest primitive reaches `7,X`, so an empty-stack
 fetch lands in the gap rather than on `IP`. Without it, `@` on an empty stack
 stores its result *into* `IP` and the inner interpreter jumps somewhere
 random: a mistyped line has to produce an error, not a crash.
+
+## Streaming the source
+
+The kernel does not contain `system.fth`. It contains a routine that reads
+it, a sector at a time, from fixed tracks the filesystem is not allowed to
+touch.
+
+`tools/mkboot.py` packs the source into 256-byte sectors with **no line
+crossing a boundary**, so the reader never has to hold a partial one: a zero
+byte means this sector is finished. `tools/mkdisk.py` lays them from track 8,
+consecutively — a sector takes about a second to compile and the disk turns
+five times in that, so spacing them out would buy nothing.
+
+`Refill` already preferred a source pointer to the keyboard. All that changed
+is what happens when that source runs out: instead of dropping to the
+keyboard it reads the next sector, and only drops to the keyboard when there
+are none left.
+
+Two things had to be got right, and neither was:
+
+- **The tracks have to be reserved before the filesystem is filled**, not
+  after. DOS puts a file wherever the VTOC says is free, and it said tracks
+  8-10 were free, so laying the source there wrote over three files that
+  were already on the disk. `mkdisk.py --reserve` now runs immediately after
+  the disk is formatted.
+- **`mkdisk.py` took the interleave from `argv[4]` only when there were
+  exactly five arguments.** Adding a sixth silently dropped the kernel to
+  interleave 3 while the boot loader still read it at 5, which loads a
+  kernel made of the right sectors in the wrong order — and that boots far
+  enough to be confusing.
 
 ## Boot cost
 

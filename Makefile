@@ -31,7 +31,7 @@ INCS    := $(wildcard src/*.inc)
 DISKFILES := $(wildcard disk/*) $(wildcard examples/*.FTH)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
-GENERATED := build/font.inc build/bootsrc.inc
+GENERATED := build/font.inc build/srcsecs.inc
 BOOT1   := build/boot1.bin
 OBJS    := $(patsubst $(SRCDIR)/%.s,build/%.o,$(SRCS))
 BIN     := build/$(PROG).bin
@@ -84,8 +84,10 @@ build:
 build/font.inc: roms/apple2p/341-0036.chr tools/mkfont.py | build
 	@python3 tools/mkfont.py $< $@ | head -1
 
-build/bootsrc.inc: src/system.fth tools/mkboot.py | build
-	@python3 tools/mkboot.py $< $@
+# The system's own source goes on the disk rather than into the image, and
+# the kernel streams it a sector at a time -- see tools/mkboot.py.
+build/srcsecs.inc build/bootsrc.bin &: src/system.fth tools/mkboot.py | build
+	@python3 tools/mkboot.py $< build/bootsrc.bin build/srcsecs.inc
 
 roms/apple2p/341-0036.chr:
 	@echo "Apple ROMs are not present.  Run: make roms" >&2; exit 1
@@ -111,13 +113,14 @@ $(BIN): $(OBJS) src/apple2.cfg
 
 disk: $(DSK)
 
-$(DSK): $(BIN) $(BOOT1) $(DISKFILES) src/system.fth
+$(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth
 	@rm -f $@
 	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
+	@python3 tools/mkdisk.py --reserve $@ 10
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
 	@for f in $(DISKFILES); do \
 	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
-	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE)
+	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE) build/bootsrc.bin
 	@$(A2KIT) catalog -d $@
 
 # -nothrottle lets the host run the 1 MHz 6502 flat out (~17x), so $(SECS)

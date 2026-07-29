@@ -23,6 +23,7 @@ KSW     = $38                   ; and its input vector
 SETTXT  = $FB2F                 ; text mode, full window
 C3INIT  = $C300                 ; the //e's own 80-column firmware
 TIB     = $0200                 ; GETLN's line buffer is our terminal buffer
+SRCBUF  = $0D00               ; one sector of the boot source, while booting
 PROMPT  = $33                   ; GETLN's prompt character
 INBUFSZ = 96                  ; a quoted string, or a typed line
 
