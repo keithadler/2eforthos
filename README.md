@@ -646,6 +646,23 @@ Reading characters off a screenshot is guesswork, and worse here than usual:
 the console keeps its even columns in auxiliary memory, so anything reading
 `$0400-$07FF` from main sees every other character.
 
+## Running it
+
+```bash
+make gui     # a window, at real speed, for using the machine
+make run     # headless: boots, screenshots, exits
+make test    # headless: 273 assertions, about two minutes
+```
+
+**Only `make gui` puts anything on the display.** `run` and `test` are
+automated — they have nothing to show anyone while they work, and a window
+that steals a Space every forty seconds makes the machine unusable while a
+suite runs. Going headless takes both halves of the incantation:
+`-video none` on its own still opens a window on macOS, and
+`SDL_VIDEODRIVER=dummy` on its own fails to start OpenGL. MAME will still
+take a snapshot in that state, which is what makes `make run` useful and how
+every image in `docs/` was captured.
+
 ## The built disk
 
 `dist/2eforthos.dsk` is a bootable 140K DOS-order image, committed so the
