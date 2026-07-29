@@ -703,7 +703,7 @@ TESTS = {
 # How much dictionary a fresh boot leaves.  The whole point of streaming the
 # source off the disk rather than carrying it in the image.
 "headroom": """
-    type $BF00 HERE - 10000 >
+    type $C000 HERE - 17000 >
     stack -1
 """,
 
@@ -750,17 +750,18 @@ TESTS = {
     stack 7
 """,
 
-# Is the language card there, and can it be written?  Read $C08B twice to
-# get read-RAM/write-RAM on bank 1, poke, peek, then $C082 to put the ROM
-# back -- all on one line, so nothing tries to print while the ROM is gone.
-"lc-ram": """
-    type $C08B C@ DROP $C08B C@ DROP 123 $D000 C! $D000 C@ $C082 C@ DROP
-    stack 123
+# The system's own dictionary is compiled into the language card and the
+# pointer comes back to main, so the whole of main above the kernel is the
+# user's.  LATEST is a system word, so it must be in the card; HERE must not.
+"language-card": """
+    type LATEST @ $D000 U<
+    stack 0
     clear
-    type $C08B C@ DROP $C08B C@ DROP 77 $E000 C! 88 $FE00 C! $C082 C@ DROP
-    depth 0
-    type $C08B C@ DROP $C08B C@ DROP $E000 C@ $FE00 C@ $C082 C@ DROP
-    stack 88 77
+    type HERE $C000 U<
+    stack -1
+    clear
+    type $C000 HERE - 17000 >
+    stack -1
 """,
 
 "raw-sectors": """
@@ -797,8 +798,11 @@ def run(name, script, keep_shots=False):
         sys.exit(f"cannot find {', '.join(missing)}")
     symarg = ",".join(f"{n}={syms[n]}" for n in wanted)
 
+    # -video none is not enough on macOS: SDL still opens a window, which
+    # takes over a Space and blacks the screen.  A dummy SDL driver is what
+    # actually keeps it off the display.
     env = dict(os.environ, TEST=script, LATESTV=str(syms["LATESTV"]),
-               SYMS=symarg)
+               SYMS=symarg, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
     cmd = [
         "mame", "apple2ee", "-rompath", str(ROOT / "roms"), "-sl4", "",
         "-gameio", "joy", "-cfg_directory", str(ROOT / "cfg"),

@@ -442,8 +442,10 @@ session.
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
 | `$0D00-$0DFF` | one sector of the system's own source, while booting |
 | `$1900-$1CBF` | fill seed stack and the two line buffers |
-| `$4000-$77EB` | the kernel |
-| `$77EC-$BFFF` | dictionary, growing upward |
+| `$4000-$78E2` | the kernel |
+| `$78E3-$BFFF` | the user's dictionary, growing upward — 18K |
+| `$D000-$EDF3` | the system's own dictionary, in the language card |
+| `$FFFA-$FFFF` | the CPU vectors, copied there from ROM |
 
 The kernel and the dictionary share one 32K region, so moving something from
 one to the other gains nothing — the only wins are code that is smaller or
@@ -460,7 +462,9 @@ The fill's seed stack and the two line buffers live above the catalog for the
 same reason: `CATBUF` is a page-aligned `$1000-$1FFF` but only sixty 36-byte
 records deep, so everything past `$186F` was going begging. Another 950 bytes.
 
-**A fresh boot now leaves about 11K free**, against 1.1K before.
+**A fresh boot now leaves 18,205 bytes free**, against 1,167 at the start of
+the day: the source moved to the disk and the system's own dictionary moved
+to the language card.
 
 Zero page: `$00-$4F` is left alone — the monitor's text window state and the
 80-column firmware's own variables live there, and the console calls both on
@@ -566,34 +570,37 @@ Three things about the harness were worth more than they cost:
 
 ## The language card
 
-Sixteen kilobytes of RAM at `$D000-$FFFF`, on every //e, and this system does
-not use a byte of it. It is the obvious next place for the dictionary to grow
-into, and there is one thing in the way.
+Sixteen kilobytes of RAM at `$D000-$FFFF`, which is also where the monitor
+ROM lives. **The system's own dictionary is compiled into it**, and the
+dictionary pointer comes back to main memory when the boot source has been
+read — so none of the system is in the user's way. They get the whole of
+`KERNEL_END` to `$BFFF`, contiguous.
 
-What was measured, rather than assumed:
+The card is banked in for the life of the session. That works because
+everything below `$C000` is untouched by the switch: main code and data stay
+visible either way, and only the ROM disappears. There were exactly **twelve
+places that called into it**, and each is bracketed by a pair of switches —
+which is what made this affordable.
 
-- **The card is there and writable.** Reading `$C08B` twice gives
-  read-RAM/write-RAM on bank 1; poking `$D000`, `$E000` and `$FE00` and
-  reading them back works. There is a test for it — `make test T=lc-ram`.
-- **Console output does not survive the ROM being banked out.** `EMIT` with
-  the card switched in never returns. The 80-column firmware lives at `$C300`
-  and `$C800-$CFFF`, which the card does not cover, but it evidently calls
-  into `$F8xx-$FFxx`, which it does.
+Three things had to be dealt with:
 
-So using the card for anything executable means replacing what the ROM does
-for us first:
+- **The CPU takes its reset and interrupt vectors from `$FFFA-$FFFF`**
+  whatever is banked there. Those six bytes are copied out of the ROM at cold
+  start, reading ROM and writing the card at the same time — which is exactly
+  what `$C089` is for.
+- **The card has to be write-enabled, not just readable.** `$C088` reads the
+  card but write-protects it, so the dictionary compiled into nothing and the
+  boot hung after the banner. `$C08B`, twice, is the one that does both.
+- **`GETLN` is in the ROM**, so waiting for a line meant waiting with the card
+  banked out — with the dictionary invisible for as long as the prompt sat
+  there. `ReadLine` replaces it: it waits in main memory and steps into the
+  ROM only for the few cycles it takes to echo a character.
 
-| | |
-|---|---|
-| `COUT` | our own 80-column output: `$0400-$07FF` in both banks, scrolling both, and a cursor |
-| `GETLN` | our own line editor |
-| `PREAD` | fifteen lines, trivial |
-| `$FFFA-$FFFF` | the CPU's vectors have to exist in the card, or reset and IRQ go somewhere random |
+Compiling the system into the card rather than letting the dictionary run
+across the `$C000` hole means no definition can ever straddle it, which is
+the failure that arrangement would invite.
 
-That is a few hundred lines of assembly and a real risk of subtle breakage in
-the part of the system everything else depends on. It is a project, not a
-finishing touch — which is why it has not been done. The dictionary went from
-1.1K to 11K without it.
+**A fresh boot now leaves 18,205 bytes** — with 4.6K still spare in the card.
 
 ## Known issues
 

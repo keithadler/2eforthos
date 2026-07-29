@@ -73,7 +73,9 @@ PdlSettle:
         lda     0,x
         stx     XSAV
         tax
+        ROMIN
         jsr     PREAD                   ; timing loop; returns the count in Y
+        ROMOUT
         tya
         ldx     XSAV
         pha

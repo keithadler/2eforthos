@@ -24,6 +24,7 @@ SETTXT  = $FB2F                 ; text mode, full window
 C3INIT  = $C300                 ; the //e's own 80-column firmware
 TIB     = $0200                 ; GETLN's line buffer is our terminal buffer
 SRCBUF  = $0D00               ; one sector of the boot source, while booting
+
 PROMPT  = $33                   ; GETLN's prompt character
 INBUFSZ = 96                  ; a quoted string, or a typed line
 
@@ -728,11 +729,70 @@ SkipCell:
 ; Terminal I/O
 ; ---------------------------------------------------------------------------
 ; COUT and friends clobber X and Y, so both get parked around every call.
+; ReadLine -- a line into TIB, length in A.
+;
+; This is the monitor's GETLN written out again, and the reason is the
+; language card: GETLN lives in the ROM, so waiting inside it means waiting
+; with the card banked out -- and the card is where the system's dictionary
+; is.  Anything looking at the machine while it sat at the prompt would see
+; ROM where the dictionary should be.  Here it waits in main memory instead,
+; and only steps into the ROM for the few cycles it takes to echo.
+;
+; Keys are folded to upper case on the way in, because every name in the
+; dictionary is upper case.
+ReadLine:
+        stx     LNX
+        lda     PROMPT
+        jsr     PutChar
+        ldy     #0
+@key:   lda     KBD
+        bpl     @key
+        bit     KBDSTRB
+        and     #$7F
+        cmp     #'a'
+        bcc     @nofold
+        cmp     #'z'+1
+        bcs     @nofold
+        sec
+        sbc     #$20
+@nofold:
+        cmp     #$0D
+        beq     @done
+        cmp     #$08                    ; backspace, and the left arrow
+        beq     @back
+        cmp     #$20
+        bcc     @key                    ; any other control: ignore it
+        cpy     #200
+        bcs     @key                    ; the line buffer is one page
+        sta     TIB,y
+        iny
+        jsr     PutChar                 ; leaves Y alone
+        jmp     @key
+@back:  cpy     #0
+        beq     @key
+        dey
+        lda     #$08
+        jsr     PutChar
+        lda     #' '
+        jsr     PutChar
+        lda     #$08
+        jsr     PutChar
+        jmp     @key
+@done:  sty     LNLEN
+        ROMIN
+        jsr     CROUT
+        ROMOUT
+        ldx     LNX
+        lda     LNLEN
+        rts
+
 PutChar:
         ora     #$80                    ; the text screen wants high ASCII
         stx     XSAV
         sty     YSAV
+        ROMIN
         jsr     COUT
+        ROMOUT
         ldx     XSAV
         ldy     YSAV
         rts
@@ -756,7 +816,9 @@ PutStr:
 
         prim    "KEY", W_KEY, 0
         stx     XSAV
+        ROMIN
         jsr     RDKEY
+        ROMOUT
         ldx     XSAV
         and     #$7F
         dex
@@ -769,7 +831,9 @@ PutStr:
         prim    "CR", W_CR, 0
         stx     XSAV
         sty     YSAV
+        ROMIN
         jsr     CROUT
+        ROMOUT
         ldx     XSAV
         ldy     YSAV
         NEXT
@@ -777,7 +841,9 @@ PutStr:
         prim    "PAGE", W_PAGE, 0
         stx     XSAV
         sty     YSAV
+        ROMIN
         jsr     HOME
+        ROMOUT
         ldx     XSAV
         ldy     YSAV
         NEXT
