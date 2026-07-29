@@ -191,9 +191,25 @@ VARIABLE FA
 \ the sector before it -- one catalog sector's contents laid over another,
 \ silently.  That is the same fault CATLOAD had, and it is worse here,
 \ because CATLOAD only miscounted while these destroy.
-VARIABLE DERR
-: RD ( t s addr -- ok ) DREAD DUP DERR ! 0= ;
-: WR ( t s addr -- ok ) DWRITE DUP DERR ! 0= ;
+\ And they retry.  A read straight after a write fails often enough to
+\ matter -- the head has just been somewhere else and the sector comes round
+\ when it comes round -- which is why DOS retried too.  Failing once is not
+\ the same as the sector not being there, and FOPEN refusing a file that LOAD
+\ had just read perfectly well is what made that obvious.
+VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
+4 CONSTANT DTRIES
+: RD ( t s addr -- ok )
+  RDA ! RDS ! RDT !
+  DTRIES 0 DO
+    RDT @ RDS @ RDA @ DREAD DUP DERR !
+    0= IF -1 UNLOOP EXIT THEN
+  LOOP 0 ;
+: WR ( t s addr -- ok )
+  RDA ! RDS ! RDT !
+  DTRIES 0 DO
+    RDT @ RDS @ RDA @ DWRITE DUP DERR !
+    0= IF -1 UNLOOP EXIT THEN
+  LOOP 0 ;
 : DISKERR ." DISK ERROR " DERR @ . CR ;
 
 \ Toggle the lock bit and write the catalog sector back.

@@ -84,6 +84,7 @@ turn on when a program wants them.
 | `n REN` | rename it — type the new name at the prompt |
 | `WORDS` | every definition in the dictionary |
 | `SEE NAME` | decompile one |
+| `n LOAD` then `EHELP` | load `EDIT.FTH` and write code on the machine |
 | `HELP` | a summary |
 
 The graphics screen is a **word, not a mode you live in**: `HGR` turns it on,

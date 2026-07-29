@@ -261,6 +261,7 @@ compiler already had.
 | `COMMENTS.FTH` | what the two comment forms will and will not swallow |
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
+| `EDIT.FTH` | **a line editor** — write code on the machine instead of the host |
 | `FINANCE.FTH` | compound interest and loan payments on the ROM's floats |
 | `GFXLIB.FTH` | polygons, ellipses, arcs, and saving what is under a sprite |
 
