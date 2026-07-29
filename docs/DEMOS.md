@@ -261,6 +261,48 @@ compiler already had.
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
 
+Every one of them, on the machine:
+
+**`STACK.FTH`** — `ALL` shows what each stack word does to `1 2 3`, printed by
+`.S`, which is the word to reach for first when something is not doing what
+you expected.
+
+![the stack words](images/ex-stack.png)
+
+**`CONDS.FTH`** — `IF`/`ELSE`/`THEN` nested three deep, then the same thing
+written with `CASE`. `CASE` is not built in: it is four lines of Forth in
+`SYSTEM.FTH`, made out of `IF` and `ELSE` and `POSTPONE`.
+
+![conditionals](images/ex-conds.png)
+
+**`DEFINING.FTH`** — `ARRAY` is a word that makes array words, and `COLOUR`
+makes `WHITE` and `BLACK` into words that set the drawing colour. This is the
+part of Forth with no equivalent in most languages.
+
+![defining words](images/ex-defining.png)
+
+**`SOUND.FTH`** — nothing to see but the prompt coming back, which is the
+point: `TONE` sits in a delay loop for the whole note, because there is no
+timer to hand it off to.
+
+![the speaker](images/ex-sound.png)
+
+**`DISKIO.FTH`** — `SHOWVTOC` reads track 17 sector 0 and reports what the
+volume table of contents says about the disk it is running from.
+
+![raw sectors](images/ex-diskio.png)
+
+**`PADDLE.FTH`** — the game port, scaled to screen coordinates with `*/`
+because 17 × 255 does not fit in a cell.
+
+![the game port](images/ex-paddle.png)
+
+**`POINTER.FTH`** — the loadable framework: a press becomes an `EV-DOWN` at
+the right coordinates, a move becomes an `EV-MOVE`, and `HOT-FIND` returns the
+execution token for whatever region the point falls in.
+
+![events and hit testing](images/ex-pointer.png)
+
 ![floored division](images/ex-math.png)
 
 ## Writing your own

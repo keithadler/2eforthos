@@ -9,6 +9,13 @@ tells you something changed, the stack tells you what the system believes.
     python3 tools/contest.py            run everything
     python3 tools/contest.py arith      run named tests
     python3 tools/contest.py --list
+
+The shot-* cases are not assertions: each loads an example, runs it and
+snapshots the screen, for the images in docs/.  They are excluded from a
+full run.  To regenerate one:
+
+    rm -rf shots && python3 tools/contest.py shot-stack
+    cp shots/apple2ee/0000.png docs/images/ex-stack.png
 """
 
 import os
@@ -1165,6 +1172,87 @@ TESTS = {
     wait 1800
     type NFILE @
     stack 23
+""",
+
+# --- screenshots for the documentation ------------------------------------
+# Not assertions: each loads an example, runs it, and snapshots what it put
+# on the screen.  Run one at a time and copy shots/apple2ee/0000.png.
+"shot-stack": """
+    load STACK.FTH
+    wait 2400
+    clear
+    type ALL
+    wait 600
+    shot
+""",
+
+"shot-conds": """
+    load CONDS.FTH
+    wait 2400
+    clear
+    type -5 SIGNOF 0 SIGNOF 7 SIGNOF
+    type 95 GRADE 85 GRADE 65 GRADE
+    type 1 NAMEOF 2 NAMEOF 3 NAMEOF 9 NAMEOF
+    wait 600
+    shot
+""",
+
+"shot-defining": """
+    load DEFINING.FTH
+    wait 2400
+    clear
+    type SHOWARR
+    type SHOWCOL
+    wait 600
+    shot
+""",
+
+"shot-sound": """
+    load SOUND.FTH
+    wait 2400
+    clear
+    type CHIRP
+    wait 900
+    type SCALE
+    wait 900
+    shot
+""",
+
+"shot-diskio": """
+    load DISKIO.FTH
+    wait 2400
+    clear
+    type SHOWVTOC
+    wait 1800
+    shot
+""",
+
+"shot-paddle": """
+    load PADDLE.FTH
+    wait 2400
+    clear
+    point 300 120
+    type SHOWPDL
+    wait 900
+    shot
+""",
+
+"shot-pointer": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    type EV-FLUSH
+    point 200 80
+    press
+    type EVENT-POLL DUP EV-TYPE . EV-XY SWAP . . CR
+    release
+    point 420 150
+    press
+    type EVENT-POLL DUP EV-TYPE . EV-XY SWAP . . CR
+    release
+    type 2 2 4 2 ' PTR-DEMO HOT-ADD  20 20 HOT-FIND NIP . CR
+    wait 300
+    shot
 """,
 
 "raw-sectors": """
