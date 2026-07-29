@@ -1179,6 +1179,15 @@ TESTS = {
     files 0
 """,
 
+"shot-chart": """
+    load CHART.FTH
+    wait 2400
+    clear
+    type BARS
+    wait 2400
+    shot
+""",
+
 "shot-arc": """
     load GFXLIB.FTH
     wait 2400
@@ -1819,6 +1828,43 @@ TESTS = {
     clear
     type TEXT
     depth 0
+""",
+
+"eg-float": """
+    load FLOAT.FTH
+    wait 2400
+    clear
+    type PI 1000 S>F F* F>S
+    stack 3141
+    clear
+    type E 1000 S>F F* F>S
+    stack 2718
+    clear
+    type 90 S>F DEG>RAD FSIN 1000 S>F F* F>S
+    stack 999
+    clear
+    type ROOTS
+    wait 900
+    depth 0
+    clear
+    type FDEPTH
+    stack 0
+""",
+
+"eg-chart": """
+    load CHART.FTH
+    wait 2400
+    clear
+    type DATA#
+    stack 7
+    clear
+    type BARS
+    wait 1800
+    type 3 39 GSCRN
+    stack 15
+    clear
+    type TEXT 2 3 +
+    stack 5
 """,
 
 "raw-sectors": """
