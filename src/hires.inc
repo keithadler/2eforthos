@@ -405,7 +405,7 @@ HgrVLine:
 ; ---------------------------------------------------------------------------
 ; HgrFillRect -- solid rectangle HX..HX2 by HY..HY2.  Filling row by row from
 ; Forth costs a few hundred cycles of threading per row; doing the whole
-; rectangle here keeps a full repaint fast enough to drag a window against.
+; rectangle here rather than from Forth keeps a screenful of fills quick.
 ; HgrHLine consumes HX, so the span is restored on every row.
 ; ---------------------------------------------------------------------------
 HgrFillRect:

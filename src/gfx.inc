@@ -8,7 +8,7 @@
 ;
 ; Everything here is a Forth word as well as a subroutine, because the point
 ; of the toolbox is that the language gains the capability -- an application
-; draws with the same vocabulary the desktop does.
+; draws with the same vocabulary the rest of the graphics words do.
 ; ---------------------------------------------------------------------------
 
 ; ---------------------------------------------------------------------------

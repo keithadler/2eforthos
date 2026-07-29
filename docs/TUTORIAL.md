@@ -312,3 +312,30 @@ defined *after* it. `.S` finds the first. The second announces itself with a
 - [FORTH.md](FORTH.md) — the language's history, and why it is like this
 - Leo Brodie, *Starting Forth* and *Thinking Forth* — the second one is
   about how to factor a program into words, and is the better book
+
+
+## What else is on the machine
+
+This walked from the prompt to a program on the floppy. The rest is in
+[LANGUAGE.md](LANGUAGE.md), but the parts worth knowing exist:
+
+**Floating point.** `S>F` and `F>S` move between cells and floats; `F+ F- F*
+F/ FSQRT FSIN FCOS FTAN FATN FLN FEXP` do the work, and `F.` prints. All of
+it is Applesoft's arithmetic, called rather than rewritten — which is why
+`1 S>F FATN 4 S>F F* F.` prints π. Note `F>S` **truncates**.
+
+**A second screen.** `GR` gives 40×48 in sixteen colours, which is the right
+tool for anything blocky — two blocks to a byte and no shifting, against 560
+pixels that need both. `GBAR` draws a bar; `CHART.FTH` draws a chart.
+
+**Reading a file.** `FOPEN` `FGETC` `FREAD` `DFGETS` `FCLOSE` walk a file's
+bytes or lines without pulling the whole thing into memory, for data rather
+than source.
+
+**Looking at things.** `SEE NAME` decompiles a word back into something like
+the source it came from. `DUMP` prints memory as hex and characters.
+`UNUSED` says how much dictionary is left. `MARKER NAME` makes a word that
+forgets everything after it, itself included.
+
+**Recovering.** `CATCH` and `THROW` let a word try something and survive it
+failing, instead of the line going down and taking the stack with it.

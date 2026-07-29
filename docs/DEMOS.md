@@ -20,7 +20,8 @@ The numbers move as files are added to the disk, so `CAT` first rather than
 trusting one written down here.
 
 Each demo defines a marker as its first word for exactly that. There is only
-about 1.1K of dictionary free on a fresh boot, so one demo at a time.
+about 16K of dictionary free on a fresh boot — room for a demo and your own
+work on top of it, though `FORGET` between demos is still tidier.
 
 **Loading uses the graphics screen as its buffer.** That is why the graphics
 demos define words and print an instruction rather than drawing something
@@ -260,6 +261,8 @@ compiler already had.
 | `COMMENTS.FTH` | what the two comment forms will and will not swallow |
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
+| `FINANCE.FTH` | compound interest and loan payments on the ROM's floats |
+| `GFXLIB.FTH` | polygons, ellipses, arcs, and saving what is under a sprite |
 
 **Charts on the lo-res screen.** `CHART.FTH` — `BARS` and `STACKED`, built
 on `GBAR` and the `DATA`/`READ` table. Lo-res is the text page seen

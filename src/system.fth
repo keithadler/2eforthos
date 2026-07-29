@@ -219,8 +219,8 @@ VARIABLE FT VARIABLE FS VARIABLE FB
   THEN ;
 
 \ Walk a file's track/sector list, freeing every data sector it names and
-\ then the list sectors themselves.  Track 0 is DOS and is never allocated
-\ to a file, so a zero track byte means an unused slot.
+\ then the list sectors themselves.  Track 0 holds the boot sector and is
+\ never allocated to a file, so a zero track byte means an unused slot.
 VARIABLE TLT VARIABLE TLS
 : FREEFILE TLS ! TLT !
   BEGIN TLT @ WHILE
