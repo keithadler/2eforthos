@@ -56,6 +56,8 @@ Forth source (see *Boot cost* below).
 | `src/hires.inc` | the 280×192 screen driver |
 | `src/gwords.inc` | Forth bindings for the driver |
 | `src/input.inc` | keyboard and game port, as Forth words |
+| `src/math.inc` | 16x16 multiply, 32/16 divide, shifts, bulk memory |
+| `src/compile.inc` | DOES>, the rest of the loop set, strings, FORGET |
 | `src/text.inc` | 40x24 text on the hi-res screen |
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
@@ -93,6 +95,11 @@ compiling. It reaches back into Forth through `DoRun`, a two-cell thread
 holding the word to run followed by a primitive that restores `IP` and
 `RTS`es to the assembly caller.
 
+259 words. `/` `MOD` `/MOD` `*/MOD` and `FM/MOD` are **floored** — the
+quotient rounds toward negative infinity and the remainder takes the sign of
+the divisor, so `-10 3 /MOD` gives 2 and −4. `SM/REM` truncates toward zero
+instead, and is there when that is what you want.
+
 **The system's own source is `src/system.fth`**, converted to a byte table by
 `tools/mkboot.py` and interpreted at boot before the keyboard is read.
 Anything expressible in Forth lives there rather than in assembly — the
@@ -116,15 +123,25 @@ i/o       EMIT KEY CR SPACE PAGE . ."
 control   IF ELSE THEN BEGIN UNTIL AGAIN WHILE REPEAT DO LOOP I EXIT EXECUTE
 define    : ; VARIABLE CONSTANT CREATE IMMEDIATE , C, ALLOT HERE ' \
 system    STATE BASE DP LATEST WORDS BYE
+stack2    -ROT TUCK 2SWAP 2OVER PICK ROLL 2>R 2R> 2R@
+maths2    UM* UM/MOD M* SM/REM FM/MOD */ */MOD S>D LSHIFT RSHIFT
+double    D+ D- DNEGATE DABS D.
+memory    @ ! C@ C! +! 2@ 2! CMOVE MOVE FILL ERASE BLANK COUNT WITHIN
+          CELL+ CELLS CHAR+ CHARS ALIGN ALIGNED >BODY
+loops     DO ?DO LOOP +LOOP I J LEAVE UNLOOP
+compile   [ ] LITERAL POSTPONE ['] [CHAR] CHAR COMPILE, RECURSE DOES>
+          IMMEDIATE ( \
+strings   ." S" C" ABORT" TYPE -TRAILING
+output    . U. .R U.R ? .S <# # #S #> HOLD SIGN
+control2  CASE OF ENDOF ENDCASE ABORT
+system2   FORGET WORDS BYE
 graphics  HGR TEXT HCLS HCOLOR HXOR HPLOT HLINE HVLINE HLINE2 HBOX
           HPOINT HCIRCLE HDISC HFRAME
 hires text TAT TEMIT TINV T."
 input     KEY? KEYC BTN PADDLE
 disk      DREAD DWRITE
-memory    CMOVE
-console   CAT LOCK DEL REN HELP GREET
-files     CATLOAD FREE
-terminal  ASKLN
+console   CAT LOCK DEL REN LOAD HELP
+files     CATLOAD FREE ASKLN
 ```
 
 Numbers accept a leading `-` and a `$` prefix for hex.
@@ -238,9 +255,40 @@ origin is what lets `FLOCK` write a change back.
 
 `FREE` counts free sectors out of the VTOC's four-byte-per-track bitmap.
 
+**DOS numbers sectors in a different order from the one they are laid down
+in**: physical sector *P* of a track holds DOS sector
+`0,7,14,6,13,5,12,4,11,3,10,2,9,1,8,15`. `DREAD` and `DWRITE` translate, and
+`D2ReadSector` keeps speaking physical numbers because that is what the boot
+loader wants.
+
+That translation was missing for a long time and nothing noticed, because 0
+and 15 are the two fixed points of the permutation — and the VTOC is sector 0
+and the first catalog sector is 15. Every read the system did worked until the
+first one that reached a file's own data.
+
 `FLOCK` is now `LOCK`, and the rest are `DEL` and `REN`; each takes the number
 `CAT` printed, and refuses an index outside the catalog rather than trusting
 it, because every one of them writes to the disk.
+
+## Loading source from the disk
+
+`n LOAD` reads a text file off the floppy and interprets it, which is what
+makes anything typed at the console survivable — write it to a file, load it
+back.
+
+The text is read into the dictionary at `HERE` and then `ALLOT`ted, so the
+definitions the file makes are compiled *above* the text rather than over it.
+Setting the kernel's own source pointer is all it then takes: the outer
+interpreter already prefers that source to the keyboard and drops back to the
+keyboard at the first zero byte, which is exactly a file's end.
+
+The obvious buffer was hi-res page 1 — eight free kilobytes that nothing else
+wants. It is the wrong answer here. `80STORE` is set for the console, and with
+`80STORE` set `$2000-$3FFF` follows `PAGE2` — which the 80-column firmware
+toggles on every character it prints. The buffer would move out from under the
+interpreter mid-line.
+
+One file at a time: a load inside a load would move the ground under the first.
 
 ## The file commands
 
@@ -273,8 +321,8 @@ file.
 | `$0800-$0FFF` | one raw disk sector |
 | `$1000-$1FFF` | the parsed catalog, 36 bytes per file |
 | `$2000-$3FFF` | hi-res page 1 — in **both** banks; aux and main interleave byte by byte to make 560 pixels per row |
-| `$4000-$7CD8` | the kernel |
-| `$7CD9-$BEFF` | dictionary, growing upward |
+| `$4000-$8EFA` | the kernel |
+| `$8EFB-$BEFF` | dictionary, growing upward — and where a loaded file's text goes |
 
 Zero page: `$00-$4F` is left alone — the monitor's text window state and the
 80-column firmware's own variables live there, and the console calls both on
@@ -303,7 +351,9 @@ aimed at the wrong thing:
   It also handed back the 10K DOS occupied at `$9600-$BFFF`.
 
 Removing the windowing environment took the image from 23233 bytes to 15577
-and the boot from ~28 emulated seconds to ~18.
+and the boot from ~28 emulated seconds to ~18. Filling the language back out
+to 259 words put it at 20235 bytes and ~25 seconds — the extra time is
+compiling the Forth half of the new word set, not loading it.
 
 `make gui SPEED=8` boots in about two seconds.
 
@@ -316,10 +366,13 @@ in `XSAV` before waiting for a line, so while the prompt is up the whole stack
 can be read out of zero page.
 
 ```bash
-make test                # everything -- a separate boot per test, a few minutes
+make test                # everything: 38 tests, ~2 minutes
 make test T="arith xor"  # named tests
 python3 tools/contest.py --list
 ```
+
+The suite runs **headless** (`-video none -sound none`). It reads memory
+rather than the screen, so a window would only steal focus once per test.
 
 Three things about the harness were worth more than they cost:
 
@@ -331,6 +384,9 @@ Three things about the harness were worth more than they cost:
 - **An ioport field does not stay written.** Anything driving the game port
   has to reassert it every frame, or an input lands or is missed depending on
   which frame it fell on.
+- **A step that touches the disk needs to be waited for.** Sampling the stack
+  forty frames after a line was typed catches a word that seeks the head
+  half-finished, and a half-finished word looks exactly like a wrong one.
 
 ## Debugging
 

@@ -192,6 +192,9 @@ D2NIBA  = $0C00
         lda     1,x
         sta     D2PTR+1
         lda     2,x
+        and     #$0F
+        tay
+        lda     LOG2PHYS,y
         sta     D2SEC
         lda     4,x
         sta     D2TRK
@@ -207,12 +210,29 @@ D2NIBA  = $0C00
         sta     1,x
         NEXT
 
+; DOS numbers sectors in a different order from the one they are laid down
+; in: physical sector P of a track holds DOS sector 0,7,14,6,13,5,12,4,11,3,
+; 10,2,9,1,8,15 respectively.  Everything above this layer -- the VTOC, the
+; catalog, a file's track/sector list -- speaks DOS numbers, so they are
+; translated here and D2ReadSector keeps speaking physical ones, which is
+; what the boot loader needs.
+;
+; 0 and 15 are the two fixed points of that permutation, and for a long time
+; they were the only sectors this system ever asked for: the VTOC is sector 0
+; and the first catalog sector is 15.  Everything worked until the first file
+; was read.
+LOG2PHYS:
+        .byte   0, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 15
+
         prim    "DREAD", W_DREAD, 0     ; track sector addr -- err
         lda     0,x
         sta     D2PTR
         lda     1,x
         sta     D2PTR+1
         lda     2,x
+        and     #$0F
+        tay
+        lda     LOG2PHYS,y
         sta     D2SEC
         lda     4,x
         sta     D2TRK

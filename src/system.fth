@@ -19,21 +19,88 @@
 : 2DROP DROP DROP ;
 : > SWAP < ;
 : <> = 0= ;
+: 0<> 0= 0= ;
 : 0> 0 SWAP < ;
+: U> SWAP U< ;
 : ABS DUP 0< IF NEGATE THEN ;
 : MIN 2DUP > IF SWAP THEN DROP ;
 : MAX 2DUP < IF SWAP THEN DROP ;
+: -ROT ROT ROT ;
+: TUCK SWAP OVER ;
+: 2SWAP 3 ROLL 3 ROLL ;
+: 2OVER 3 PICK 3 PICK ;
 : SPACE 32 EMIT ;
-: SPACES 0 DO SPACE LOOP ;
-: /MOD U/MOD ;
-: / U/MOD NIP ;
-: MOD U/MOD DROP ;
-: TYPE 0 DO DUP I + C@ 127 AND EMIT LOOP DROP ;
+: SPACES 0 ?DO SPACE LOOP ;
+: TYPE 0 ?DO DUP I + C@ 127 AND EMIT LOOP DROP ;
+: COUNT DUP 1+ SWAP C@ ;
 
-\ Fixed-width digits, for columns that have to line up.
-: .D 48 + EMIT ;
-: .2 DUP 10 / .D 10 MOD .D ;
-: .3 DUP 100 / .D DUP 10 / 10 MOD .D 10 MOD .D ;
+\ A cell is two bytes and a character is one, and neither ever needs padding
+\ on a 6502 -- so the alignment words are here to be spelled, not to act.
+: CELL+ 2 + ;   : CELLS 2* ;
+: CHAR+ 1+ ;    : CHARS ;
+: ALIGN ;       : ALIGNED ;
+: >BODY 3 + ;                           \ past the JSR in the code field
+: 2@ DUP 2 + @ SWAP @ ;
+: 2! SWAP OVER ! 2 + ! ;
+: ERASE 0 FILL ;
+: BLANK 32 FILL ;
+: WITHIN OVER - >R - R> U< ;
+
+\ --- signed and mixed precision --------------------------------------------
+\ UM* and UM/MOD are unsigned and in the kernel; everything signed is those
+\ two with the signs taken off first and put back afterwards.
+: S>D DUP 0< IF -1 ELSE 0 THEN ;
+: DABS DUP 0< IF DNEGATE THEN ;
+: D- DNEGATE D+ ;
+: M* 2DUP XOR >R ABS SWAP ABS UM* R> 0< IF DNEGATE THEN ;
+
+\ SM/REM truncates toward zero and FM/MOD toward negative infinity; they
+\ differ only when the division is inexact and the signs disagree, and that
+\ is exactly the adjustment at the end of FM/MOD.
+VARIABLE SRN VARIABLE SRD
+: SM/REM ( d n -- rem quot )
+  DUP SRN ! OVER SRD !
+  ABS >R DABS R> UM/MOD
+  SRD @ SRN @ XOR 0< IF NEGATE THEN
+  SWAP SRD @ 0< IF NEGATE THEN SWAP ;
+: FM/MOD SM/REM
+  OVER 0<> SRD @ SRN @ XOR 0< AND
+  IF 1- SWAP SRN @ + SWAP THEN ;
+
+: /MOD >R S>D R> FM/MOD ;
+: / /MOD NIP ;
+: MOD /MOD DROP ;
+: */MOD >R M* R> FM/MOD ;
+: */ */MOD NIP ;
+
+\ --- pictured numeric output -----------------------------------------------
+\ Digits come out least significant first, so they are laid down backwards
+\ into a buffer and the string is whatever is left between the pointer and
+\ the end.
+CREATE PICBUF 36 ALLOT
+VARIABLE PICP
+: <# PICBUF 36 + PICP ! ;
+: HOLD PICP @ 1- DUP PICP ! C! ;
+: SIGN 0< IF 45 HOLD THEN ;
+: UD/MOD >R 0 R@ UM/MOD ROT ROT R> UM/MOD ROT ;
+: # BASE @ UD/MOD ROT DUP 9 > IF 7 + THEN 48 + HOLD ;
+: #S BEGIN # 2DUP OR 0= UNTIL ;
+: #> 2DROP PICP @ PICBUF 36 + OVER - ;
+: U. 0 <# #S #> TYPE SPACE ;
+: U.R >R 0 <# #S #> R> OVER - SPACES TYPE ;
+: .R >R DUP ABS 0 <# #S ROT SIGN #> R> OVER - SPACES TYPE ;
+: D. TUCK DABS <# #S ROT SIGN #> TYPE SPACE ;
+: ? @ . ;
+: .S DEPTH DUP 0 ?DO DUP I - PICK . LOOP DROP ;
+: -TRAILING BEGIN DUP 0> IF 2DUP + 1- C@ 32 = ELSE 0 THEN WHILE 1- REPEAT ;
+
+\ --- CASE ------------------------------------------------------------------
+\ The control-flow stack is the data stack, so CASE marks its place with a
+\ zero and ENDCASE patches forward branches until it finds it again.
+: CASE 0 ; IMMEDIATE
+: OF POSTPONE OVER POSTPONE = POSTPONE IF POSTPONE DROP ; IMMEDIATE
+: ENDOF POSTPONE ELSE ; IMMEDIATE
+: ENDCASE POSTPONE DROP BEGIN ?DUP WHILE POSTPONE THEN REPEAT ; IMMEDIATE
 
 \ --- shapes ----------------------------------------------------------------
 \ The drawing words in the kernel plot, span and fill; a rectangle outline is
@@ -89,11 +156,11 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 
 \ --- listing the disk ------------------------------------------------------
 \ Locked files are starred, the way DOS itself listed them.
-: .ENT DUP .2 SPACE
+: .ENT DUP 2 .R SPACE
   DUP CATENT C@ 128 AND IF 42 ELSE 32 THEN EMIT
   DUP CATENT 6 + 30 TYPE SPACE
   DUP CATENT C@ FTYPE EMIT SPACE
-  CATENT 1+ C@ .3 ;
+  CATENT 1+ C@ 3 .R ;
 : CAT
   ."  #  NAME                           T SIZ" CR
   NFILE @ 0 DO I .ENT CR LOOP
@@ -174,11 +241,48 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
   FSEC SECBUF DWRITE DROP
   CATLOAD ;
 
+\ --- loading source from the disk -----------------------------------------
+\ The text is read into the dictionary at HERE and then ALLOTted, so the
+\ definitions the file makes are compiled above the text rather than over it.
+\ SRC is the kernel's own source pointer: the outer interpreter already reads
+\ lines from there in preference to the keyboard and drops back to the
+\ keyboard at the first zero byte, which is exactly what loading a file needs.
+\ One file at a time -- a load inside a load would move the ground under the
+\ first one.
+$CE CONSTANT 'SRC  $BE00 CONSTANT LDTOP
+VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
+: LSECS ( t s -- ) LS ! LT !
+  BEGIN LT @ WHILE
+    LT @ LS @ TSBUF DREAD DROP
+    122 0 DO TSBUF 12 + I 2* +
+      DUP C@ 0= IF DROP ELSE
+        LP @ LDTOP < IF
+          DUP C@ SWAP 1+ C@ LP @ DREAD DROP  256 LP +!
+        ELSE DROP THEN
+      THEN LOOP
+    TSBUF 1+ C@ TSBUF 2 + C@ LS ! LT !
+  REPEAT
+  0 LP @ C! ;
+
+\ DOS stores text with the high bit set, so every byte needs it taken off
+\ before the interpreter sees it.  The run ends at the first zero, which is
+\ how a DOS text file ends and where LSECS puts one anyway.
+: LNORM LBUF @ BEGIN DUP C@ ?DUP WHILE 127 AND OVER C! 1+ REPEAT DROP ;
+
+: LOAD ( n -- ) FPICK 0= IF EXIT THEN
+  FSEC SECBUF DREAD DROP
+  HERE DUP LBUF ! LP !
+  FENTRY DUP C@ SWAP 1+ C@ LSECS
+  LNORM
+  LP @ HERE - 1+ ALLOT                  \ the text is dictionary now
+  LBUF @ 'SRC ! ;
+
 \ --- the greeting ----------------------------------------------------------
 : HELP
   ." CAT              LIST THE DISK" CR
   ." n LOCK           LOCK OR UNLOCK A FILE" CR
   ." n DEL   n REN    DELETE OR RENAME ONE" CR
+  ." n LOAD           INTERPRET A TEXT FILE AS FORTH" CR
   ." WORDS            EVERY DEFINITION IN THE DICTIONARY" CR
   ." HGR   TEXT       GRAPHICS SCREEN ON, AND BACK TO HERE" CR
   ." n HCOLOR         0 BLACK 1 GREY 2 GREY 3 WHITE" CR
