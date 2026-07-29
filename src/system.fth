@@ -186,12 +186,22 @@ VARIABLE FA
 : FSEC FA @ 2 + C@ FA @ 3 + C@ ;
 : FENTRY SECBUF FA @ 4 + C@ + ;
 
+\ Every command below reads a sector, changes a few bytes and writes it back.
+\ If the read fails and the error is thrown away, what gets written back is
+\ the sector before it -- one catalog sector's contents laid over another,
+\ silently.  That is the same fault CATLOAD had, and it is worse here,
+\ because CATLOAD only miscounted while these destroy.
+VARIABLE DERR
+: RD ( t s addr -- ok ) DREAD DUP DERR ! 0= ;
+: WR ( t s addr -- ok ) DWRITE DUP DERR ! 0= ;
+: DISKERR ." DISK ERROR " DERR @ . CR ;
+
 \ Toggle the lock bit and write the catalog sector back.
 : LOCK FPICK 0= IF EXIT THEN
-  FSEC SECBUF DREAD DROP
+  FSEC SECBUF RD 0= IF DISKERR EXIT THEN
   FENTRY 2 +
   DUP C@ 128 XOR SWAP C!
-  FSEC SECBUF DWRITE DROP
+  FSEC SECBUF WR 0= IF DISKERR EXIT THEN
   CATLOAD ;
 
 \ A DO LOOP always runs once, so a zero shift count needs guarding.
@@ -228,14 +238,14 @@ VARIABLE TLT VARIABLE TLS
 \ place.  Locked files are refused, which is what the lock is for.
 : DEL FPICK 0= IF EXIT THEN
   FA @ C@ 128 AND IF ." FILE IS LOCKED" CR EXIT THEN
-  17 0 VTOCBUF DREAD DROP
-  FSEC SECBUF DREAD DROP
+  17 0 VTOCBUF RD 0= IF DISKERR EXIT THEN
+  FSEC SECBUF RD 0= IF DISKERR EXIT THEN
   FENTRY
   DUP C@ OVER 1+ C@ FREEFILE
   DUP C@ OVER 32 + C!
   255 SWAP C!
-  FSEC SECBUF DWRITE DROP
-  17 0 VTOCBUF DWRITE DROP
+  FSEC SECBUF WR 0= IF DISKERR EXIT THEN
+  17 0 VTOCBUF WR 0= IF DISKERR EXIT THEN
   CATLOAD FREE NFREE ! ;
 
 \ Rename: names are stored high-bit set and space padded to 30 characters.
@@ -244,11 +254,11 @@ VARIABLE NADR VARIABLE NLEN VARIABLE NDST
   ." NAME? " ASKLN NLEN ! NADR !
   NLEN @ 0= IF EXIT THEN
   NLEN @ 30 > IF 30 NLEN ! THEN
-  FSEC SECBUF DREAD DROP
+  FSEC SECBUF RD 0= IF DISKERR EXIT THEN
   FENTRY 3 + NDST !
   30 0 DO 160 NDST @ I + C! LOOP
   NLEN @ 0 DO NADR @ I + C@ 128 OR NDST @ I + C! LOOP
-  FSEC SECBUF DWRITE DROP
+  FSEC SECBUF WR 0= IF DISKERR EXIT THEN
   CATLOAD ;
 
 \ --- writing files --------------------------------------------------------
@@ -349,7 +359,7 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
   WNL @ 0 DO WNAME I + C@ 128 OR CATE @ 3 + I + C! LOOP
   WCNT @ 255 AND CATE @ 33 + C!
   WCNT @ 8 RSHIFT CATE @ 34 + C!
-  FT2 @ FS2 @ SECBUF DWRITE DROP ;
+  FT2 @ FS2 @ SECBUF WR 0= IF DISKERR THEN ;
 
 : WRITEF ( addr len -- )
   WL ! WA !
@@ -358,7 +368,7 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
   WNL @ 0= IF EXIT THEN
   WNL @ 30 > IF 30 WNL ! THEN
   WNA @ WNAME WNL @ MOVE
-  17 0 VTOCBUF DREAD DROP
+  17 0 VTOCBUF RD 0= IF DISKERR EXIT THEN
   0 WCNT ! -1 TT ! -1 TS !
   NEWTS
   TT @ 0< IF ." DISK FULL" CR EXIT THEN
@@ -367,7 +377,7 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
   TSFLUSH
   FINDENT 0= IF ." CATALOG FULL" CR EXIT THEN
   PUTENT
-  17 0 VTOCBUF DWRITE DROP
+  17 0 VTOCBUF WR 0= IF DISKERR EXIT THEN
   CATLOAD FREE NFREE ! ;
 
 : SAVE ( addr len -- ) 0 WT ! 0 WHDRN ! WRITEF ;
