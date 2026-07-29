@@ -183,6 +183,10 @@ local function run(step)
         report(ok, string.format("stack = %s (wanted %s)%s",
                table.concat(got, " "), rest, bad and " OUT OF RANGE" or ""))
         timer = 2
+    elseif op == "show-only" then
+        local got = dstack()
+        print(string.format("     top of stack = %s", got[1] or "empty"))
+        timer = 2
     elseif op == "depth" then
         local got = dstack()
         report(#got == tonumber(rest),
