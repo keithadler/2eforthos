@@ -766,5 +766,5 @@ D2TMP:   .byte  0
 D2IDX:   .byte  0
 D2VOL:   .byte  0
 D2NIBC:  .byte  0                       ; the trailing checksum byte
-D2NIBDEC:.res   256                     ; built at cold start from D2NIBENC
+; D2NIBDEC is above the catalog with the other cold-start buffers: kernel.inc
         .segment "CODE"

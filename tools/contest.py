@@ -712,8 +712,8 @@ TESTS = {
 # This is a floor, not a target: it is here to catch a collapse -- something
 # large accidentally compiled into the image rather than left on the disk --
 # and not to hold the figure at whatever it happened to be on a good day.
-# The system leaves 15972 bytes as this is written, and the threshold sits a
-# little under that.  Raise it when the number rises; do not lower it without
+# The system leaves 16458 bytes as this is written, and the threshold sits
+# under that.  Raise it when the number rises; do not lower it without
 # knowing what was spent.
 "headroom": """
     type $C000 HERE - 15000 >
@@ -1060,6 +1060,10 @@ TESTS = {
     stack -1 0
 """,
 
+# The DREAD comes with the head deliberately left BETWEEN tracks by DHALF,
+# and recovering from that costs the driver a couple of seconds of address
+# fields that match no track.  The wait is for that: sampling early catches
+# the read mid-flight, with its track argument still on the stack.
 "cov-disk": """
     type DRECAL
     depth 0
@@ -1074,6 +1078,7 @@ TESTS = {
     depth 1
     clear
     type 17 0 $0E80 DREAD
+    wait 600
     stack 0
     clear
     type DBYTES
@@ -1362,11 +1367,14 @@ TESTS = {
 #
 # Two thresholds matter.  15000 is the floor: below it there is not enough
 # room to load a demo and define anything.  16384 is what PICSAVE needs to
-# stage both halves of the screen, and the kernel is currently 412 bytes too
-# fat for it -- so that one is recorded rather than asserted, and the day it
-# passes is the day PICSAVE starts working again.
+# stage both halves of the screen -- once 412 bytes out of reach, regained
+# when the uninitialized buffers moved out of the image, and asserted here
+# so it cannot quietly go away again.
 "unused": """
     type UNUSED 15000 >
+    stack -1
+    clear
+    type UNUSED 16384 < 0=
     stack -1
     clear
     type UNUSED $C000 HERE - =
@@ -1423,9 +1431,11 @@ TESTS = {
 
 # The screen is 16K -- $2000-$3FFF in *both* banks -- so BSAVE of 8K saves
 # half a picture.  PICSAVE stages both halves into one contiguous block,
-# which needs 16K free; the kernel has grown past leaving that much, so what
-# is checked here is that it says so rather than writing into the I/O page
-# at $C000, and that both banks are readable either way.
+# which needs 16K free.  For a while the kernel had grown past leaving that
+# much and this test asserted the polite refusal; the uninitialized buffers
+# then moved out of the image to the block above the catalog, and the room
+# came back.  UNUSED PICLEN < is the assertion that keeps it: if this fails,
+# the kernel has grown past 16K free again and PICSAVE is dead again.
 "picture": """
     type HGR HCLS 3 HCOLOR 0 559 96 HLINE
     wait 300
@@ -1433,14 +1443,43 @@ TESTS = {
     stack 127 127
     clear
     type UNUSED PICLEN <
-    stack -1
-    clear
-    type PICSAVE
-    wait 300
-    depth 0
+    stack 0
     clear
     type TEXT 6 7 *
     stack 42
+""",
+
+# The whole journey: format, draw, save the screen, wipe it, load it back.
+# On the stock disk a picture does not fit -- 65 sectors against 23 free --
+# so the test INITs first, which is also the only regular exercise INIT and
+# the write-then-read settling get: sixteen writes and then a read of what
+# was just written is exactly the sequence that used to come back with the
+# catalog it had erased.
+"picture-roundtrip": """
+    wait 300
+    type INIT
+    wait 1500
+    files -28
+    type HGR HCLS 3 HCOLOR 100 40 HPLOT 200 96 50 HCIRCLE
+    wait 600
+    type PICSAVE
+    type PIC
+    wait 3000
+    files -27
+    type HCLS
+    wait 600
+    type 100 40 HPOINT 200 146 HPOINT
+    wait 300
+    stack 0 0
+    clear
+    type 0 PICLOAD
+    wait 3000
+    type 100 40 HPOINT 200 146 HPOINT
+    wait 300
+    stack -1 -1
+    clear
+    type TEXT
+    depth 0
 """,
 
 "gfxlib": """
@@ -2036,7 +2075,7 @@ def run(name, script, keep_shots=False):
         # scales it up.
         *(["-snapsize", os.environ["SNAPSIZE"], "-snapview", "internal"]
           if os.environ.get("SNAPSIZE") else []),
-        "-nothrottle", "-seconds_to_run", "300", "-autoboot_delay", "0",
+        "-nothrottle", "-seconds_to_run", "480", "-autoboot_delay", "0",
         "-autoboot_script", str(ROOT / "tools" / "contest.lua"),
         "-snapshot_directory", str(shots),
     ]

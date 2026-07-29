@@ -487,6 +487,15 @@ the end of the chain and reported seven files out of twenty-nine with an `OK`
 after it, and the file commands wrote one catalog sector over another.
 Silently, in both cases.
 
+A read shortly after a write is a special case, and a nasty one: it cannot be
+trusted even when it *succeeds*. Some such reads fail — the retry catches
+those — and some return the sector's **old** contents with no error at all.
+`INIT` wrote an empty catalog, read it straight back, and got the twenty-eight
+files it had just erased. So the first read after a write steps the head away
+and back first (the way DOS recalibrated between retry groups), which forces
+the written track out of the drive's hands; writes themselves never mind and
+pay nothing.
+
 
 
 | Word | Effect | |
@@ -535,8 +544,10 @@ reserving a fixed eleven tracks — while the source had reached track 12 — is
 exactly how a formatted disk came to put its first file on top of the system
 and stop booting.
 
-`PICSAVE` needs 16K of free dictionary to stage both halves of the screen,
-and says so when it has not got it.
+`PICSAVE` needs 16K of free dictionary to stage both halves of the screen — a
+fresh boot leaves about 16.4K, so it fits, with a few dozen bytes to spare.
+If the kernel ever grows past leaving 16K again, `PICSAVE` refuses and says
+so rather than writing into the I/O page.
 
 | Word | Effect | |
 |---|---|---|

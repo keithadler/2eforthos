@@ -17,6 +17,7 @@
 --   mem ADDR VALUE    assert one byte of memory
 --   nonzero ADDR N    assert N bytes from ADDR are not all zero
 --   screen            print the 80-column text screen, to see what it said
+--   pcs N             sample the PC and IP for N frames, print the hot pages
 
 local LATESTV = tonumber(os.getenv("LATESTV") or "0")
 local READY   = tonumber(os.getenv("READYMAX") or "5400")
@@ -55,6 +56,7 @@ local function button()
 end
 
 local mem, frames, phase = nil, 0, "wait"
+local pcframes, pchist = 0, nil
 local basefiles = nil    -- how many files the disk booted with
 local steps, at, timer = {}, 1, 0
 local posting = false                   -- a line is still being typed in
@@ -228,6 +230,13 @@ local function run(step)
         timer = 2
     elseif op == "wait" then
         timer = tonumber(rest)
+    elseif op == "pcs" then
+        -- Sample the program counter for N frames and print the histogram
+        -- by page: where the machine actually spends its time, for when a
+        -- step takes far longer than it has any right to.
+        pcframes = tonumber(rest) or 300
+        pchist = {}
+        timer = 0
     elseif op == "screen" then
         -- Blank trailing rows are dropped: the console is usually near the
         -- bottom and the empty half of the screen is noise.
@@ -318,6 +327,32 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
         return
     end
     if phase ~= "run" then return end
+    if pcframes > 0 then
+        pcframes = pcframes - 1
+        local pc = manager.machine.devices[":maincpu"].state["PC"].value
+        local page = pc >> 8
+        pchist[page] = (pchist[page] or 0) + 1
+        -- and the thread being run: IP names the colon word, where PC only
+        -- names the primitive it happens to be inside
+        local ip = w(0xB0)
+        local ipage = 0x1000 + (ip >> 8)        -- keyed apart from PC pages
+        pchist[ipage] = (pchist[ipage] or 0) + 1
+        if pcframes == 0 then
+            local pages = {}
+            for k in pairs(pchist) do pages[#pages+1] = k end
+            table.sort(pages, function(a, b)
+                return pchist[a] > pchist[b] end)
+            local out = {}
+            for i = 1, math.min(#pages, 12) do
+                local k = pages[i]
+                out[#out+1] = string.format("%s%02Xxx:%d",
+                                            k >= 0x1000 and "ip" or "",
+                                            k & 0xFF, pchist[k])
+            end
+            print("     pc " .. table.concat(out, " "))
+        end
+        return
+    end
     if fx then fx:set_value(wantx) end
     if fy then fy:set_value(wanty) end
     if btn then btn:set_value(wantbtn) end

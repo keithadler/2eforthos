@@ -31,6 +31,8 @@ KERNADDR  = $4000
 ; The driver's buffers go above what the PROM loads, since that is us.
 D2NIBM  = $1000
 D2NIBA  = $1100
+D2NIBDEC = $1200                ; the kernel keeps its own copy elsewhere;
+                                ; all three are scratch the kernel reuses
 
 ; The driver expects these in zero page.  The kernel gets them from zp.inc;
 ; here they are declared directly, since none of the rest of that map applies.

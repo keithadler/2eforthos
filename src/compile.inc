@@ -799,7 +799,6 @@ W_ABORTQ:
 ; ---------------------------------------------------------------------------
         .segment "DATA"
 LVMAX   = 32                            ; sixteen pending LEAVEs is plenty
-SQBUF   = $1C00                         ; spare room above the catalog
-LVSTK:  .res    LVMAX
+; SQBUF and LVSTK are above the catalog: kernel.inc has the map
 LVDEPTH: .byte  0
         .segment "CODE"

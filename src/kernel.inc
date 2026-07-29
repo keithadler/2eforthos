@@ -28,6 +28,37 @@ SRCBUF  = $0D00               ; one sector of the boot source, while booting
 PROMPT  = $33                   ; GETLN's prompt character
 INBUFSZ = 96                  ; a quoted string, or a typed line
 
+; --- $1870-$1FFF: buffers above the catalog --------------------------------
+; The catalog ends at $1870 (CATBUF at $1000, sixty 36-byte records) and the
+; hi-res screen starts at $2000, and the room between belongs to nobody.
+; Every buffer that ships as zeros in the kernel image goes here instead: a
+; .res in a loaded segment costs its size in image bytes and in dictionary
+; headroom, and headroom is what PICSAVE was 412 bytes short of.  Nothing
+; here needs an initial value -- each is filled at cold start or in use.
+;
+; This block is the WHOLE map of the region, every occupant, one place.  It
+; was not always: the fill's seed stacks were allocated here from fill.inc
+; and the disk decode table was later allocated on top of them from another
+; file, so a flood fill would have quietly destroyed every disk read until
+; the next boot.  Allocate from this list, never around it.
+BUCKETS  = $1870                ; 32: hash chain heads, built at cold start
+BTAILS   = $1890                ; 32: BuildIndex's tails, dead after boot
+NUMBUF   = $18B0                ; 20: digits, emitted in reverse
+LVSTK    = $18C4                ; 32: pending LEAVEs while compiling
+                                ; $18E4-$18FF spare
+FSXL     = $1900                ; 256: flood fill seed stack, x low bytes
+FSXH     = $1A00                ; 256: seed stack, x high bytes
+FSY      = $1B00                ; 256: seed stack, y
+SQBUF    = $1C00                ; 96 (INBUFSZ): a quoted string
+INBUF    = $1C60                ; 96 (INBUFSZ): ASKLN's copy of a typed line
+                                ; $1CC0-$1CFF spare
+D2NIBDEC = $1D00                ; 256: 6-and-2 decode, built at cold start.
+                                ; Page aligned like D2NIBM/D2NIBA, though
+                                ; only the encode side is cycle-critical.
+FZSAVE   = $1E00                ; 93: the whole of $50-$AC, around FP calls
+FSTK     = $1E60                ; 45: eight floats and a spare for FSWAP
+                                ; $1E8D-$1FFF spare
+
 .macro  NEXT
         jmp     DoNext
 .endmacro
