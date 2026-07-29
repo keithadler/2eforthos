@@ -1260,6 +1260,92 @@ TESTS = {
     shot
 """,
 
+# The primitives have to mean exactly what the colon definitions did.
+"fast-words": """
+    type 3 4 > 4 3 > 5 5 >
+    stack 0 -1 0
+    clear
+    type 3 4 <> 5 5 <> 0 0<> 7 0<>
+    stack -1 0 0 -1
+    clear
+    type 5 0> -5 0> 0 0>
+    stack 0 0 -1
+    clear
+    type 9 3 U> 3 9 U>
+    stack 0 -1
+    clear
+    type -7 ABS 7 ABS 0 ABS
+    stack 0 7 7
+    clear
+    type 3 9 MIN 3 9 MAX -4 2 MIN -4 2 MAX
+    stack 2 -4 9 3
+    clear
+    type 1 2 3 -ROT
+    stack 2 1 3
+    clear
+    type 1 2 TUCK
+    stack 2 1 2
+    clear
+    type 1 2 2DUP
+    stack 2 1 2 1
+    clear
+    type 1 2 3 4 2DROP
+    stack 2 1
+""",
+
+"unused": """
+    type UNUSED 17000 >
+    stack -1
+    clear
+    type UNUSED $C000 HERE - =
+    stack -1
+""",
+
+"stack-pointers": """
+    type SP@ SP@ -
+    stack 2
+    clear
+    type RP@ $0100 U> RP@ $0200 U<
+    stack -1 -1
+    clear
+    type 5 6 +
+    stack 11
+""",
+
+# A word can try something and recover, instead of the line going down.
+# Note: ' not ['] -- ['] is compile-only and pushes nothing at the prompt,
+# which is what made this look broken the first time it was written.
+"catch-throw": """
+    type : BOOM 42 THROW ;
+    type : SAFE 99 ;
+    type ' SAFE CATCH
+    stack 0 99
+    clear
+    type ' BOOM CATCH
+    stack 42
+    clear
+    type : DEEP BOOM 1 2 3 ;
+    type ' DEEP CATCH
+    stack 42
+    clear
+    type 7 8 +
+    stack 15
+""",
+
+# Writing into $C000 is not a crash, it is soft switches: it would bank the
+# language card out from under the dictionary.  The guard has to catch it,
+# say so, and leave the machine usable.
+"dict-full": """
+    type $BFF0 DP !
+    depth 0
+    clear
+    type 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+    depth 0
+    clear
+    type 3 4 +
+    stack 7
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0

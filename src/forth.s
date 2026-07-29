@@ -90,6 +90,7 @@ ColdStart:
 .include "input.inc"
 .include "math.inc"
 .include "compile.inc"
+.include "fast.inc"
 .include "diskii.inc"
 .include "hires.inc"
 .include "text.inc"
@@ -103,6 +104,7 @@ ColdStart:
 ; The system's own banner is printed from Forth once the dictionary is up.
 ; This is only what the kernel says while it is still building it.
 BANNER: .byte   "INITIALIZING...", $0D, $00
+DICTFULL: .byte "DICTIONARY FULL", $0D, $00
 
 
 ; ---------------------------------------------------------------------------
