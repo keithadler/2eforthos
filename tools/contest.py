@@ -34,7 +34,7 @@ ROW96 = 0x2228
 TESTS = {
 
 "boot": """
-    check NFILE 22
+    check NFILE 23
     depth 0
 """,
 
@@ -115,9 +115,9 @@ TESTS = {
 
 # The catalog is read from the disk at boot, not compiled in.
 "catalog": """
-    check NFILE 22
+    check NFILE 23
     type NFILE @
-    stack 22
+    stack 23
     clear
     type FREE
     wait 240
@@ -520,7 +520,7 @@ TESTS = {
     type S" : NEWWORD 4242 ;" SAVE
     type SAVED.FTH
     wait 900
-    check NFILE 23
+    check NFILE 24
     clear
     load SAVED.FTH
     wait 900
@@ -537,7 +537,7 @@ TESTS = {
     type $0D00 16 BSAVE
     type BLOB
     wait 900
-    check NFILE 23
+    check NFILE 24
     clear
     type $0E00 16 0 FILL
     clear
@@ -717,7 +717,7 @@ TESTS = {
     stack 7 222
     clear
     type NFILE @
-    stack 22
+    stack 23
     clear
     type SAVEDICT
     type OVL.BIN
@@ -769,23 +769,178 @@ TESTS = {
 # sector before it a second time.
 "catalog-count": """
     type NFILE @
-    stack 22
+    stack 23
     clear
     type CATLOAD
     wait 1800
     type NFILE @
-    stack 22
+    stack 23
     clear
     type S" : X 1 ;" SAVE
     type COUNTED.FTH
     wait 1800
     type NFILE @
-    stack 23
+    stack 24
     clear
     type CATLOAD
     wait 1800
     type NFILE @
-    stack 23
+    stack 24
+""",
+
+# POINTER.FTH -- one test per word.  The game port is driven from the
+# harness, so PTR-XY and the event queue can be exercised for real.
+"ptr-sources": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    point 200 100
+    type JOY? 
+    stack -1
+    clear
+    type JOY-XY
+    depth 2
+    clear
+    type JOY-BTN0 JOY-BTN1
+    stack 0 0
+    clear
+    type PTR-SRC@
+    stack 2
+    clear
+    type 1 PTR-SRC! PTR-SRC@ 2 PTR-SRC!
+    stack 1
+""",
+
+"ptr-position": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    point 200 100
+    type PTR-XY
+    depth 2
+    clear
+    type PTR-XY DROP 200 - ABS 8 <
+    stack -1
+    clear
+    type PTR-XY SWAP DROP 100 - ABS 6 <
+    stack -1
+    clear
+    type 1 PTR-SRC! 300 150 PTR-POS! PTR-XY 2 PTR-SRC!
+    stack 150 300
+    clear
+    type PTR-BTN
+    stack 0
+""",
+
+"ptr-coords": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    type 70 80 >CELL
+    stack 10 10
+    clear
+    type 10 10 CELL>
+    stack 80 70
+    clear
+    type 0 0 >CELL
+    stack 0 0
+    clear
+    type 50 50 5 5 4 3 CLICK-IN?
+    stack -1
+    clear
+    type 10 50 5 5 4 3 CLICK-IN?
+    stack 0
+    clear
+    type 100 20 5 5 4 3 CLICK-IN?
+    stack 0
+""",
+
+"ptr-events": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    type EV-FLUSH EVENT?
+    stack 0
+    clear
+    type 2 100 50 0 EV-PUT EVENT?
+    stack -1
+    clear
+    type EV-GET DUP EV-TYPE SWAP DUP EV-XY ROT EV-KEY
+    stack 0 50 100 2
+    clear
+    type EVENT?
+    stack 0
+    clear
+    type 1 0 0 65 EV-PUT EV-GET EV-KEY
+    stack 65
+    clear
+    type 3 1 2 0 EV-PUT EV-GET EV-PUSH EVENT?
+    stack -1
+""",
+
+"ptr-hotspots": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    type : HIT1 111 ; : HIT2 222 ;
+    type HOT-CLEAR
+    type 2 2 4 2 ' HIT1 HOT-ADD
+    type 20 10 4 2 ' HIT2 HOT-ADD
+    clear
+    type 20 20 HOT-FIND NIP
+    stack -1
+    clear
+    type 20 20 HOT-FIND DROP EXECUTE
+    stack 111
+    clear
+    type 145 85 HOT-FIND DROP EXECUTE
+    stack 222
+    clear
+    type 500 180 HOT-FIND
+    stack 0 0
+    clear
+    type HOT-CLEAR 20 20 HOT-FIND
+    stack 0 0
+""",
+
+# The button, and the events it generates, driven through the game port.
+"ptr-button": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    point 300 100
+    type PTR-BTN
+    stack 0
+    clear
+    press
+    type JOY-BTN0
+    stack -1
+    clear
+    type PTR-BTN
+    stack -1
+    clear
+    release
+    type PTR-BTN
+    stack 0
+""",
+
+# EV-GEN turns a change in the pointer into a queued event.
+"ptr-event-gen": """
+    load POINTER.FTH
+    wait 2400
+    clear
+    point 300 100
+    type EV-FLUSH EVENT-POLL DROP EV-FLUSH
+    press
+    type EVENT-POLL DUP EV-TYPE SWAP DROP
+    stack 2
+    clear
+    release
+    type EVENT-POLL DUP EV-TYPE SWAP DROP
+    stack 3
+    clear
+    type EV-FLUSH KBD-PTR
+    stack 0
 """,
 
 "raw-sectors": """
