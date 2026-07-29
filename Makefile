@@ -56,9 +56,19 @@ BOOTFRAMES ?= 2000
 # ratio, so this is the box it fits the picture into.
 SCALE ?= 2
 MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
-               -window -nomaximize -snapshot_directory $(SHOTS) \
-               -cfg_directory $(CURDIR)/cfg -mouse \
+               -snapshot_directory $(SHOTS) \
+               -cfg_directory $(CURDIR)/cfg -mouse
+
+# Only the interactive target puts anything on the display.
+MAME_WINDOW := -window -nomaximize \
                -resolution $(shell echo $$((560*$(SCALE))))x$(shell echo $$((384*$(SCALE))))
+
+# Headless, and it takes both halves: -video none on its own still opens a
+# window on macOS, and a dummy SDL driver on its own fails to start OpenGL.
+# MAME will still take a snapshot like this, which is the whole point -- an
+# automated run has nothing to show anyone while it runs.
+MAME_HEADLESS := SDL_VIDEODRIVER=dummy
+MAME_NOVIDEO  := -video none -sound none
 
 .PHONY: all roms disk dist run gui poke monitor test clean
 
@@ -132,12 +142,13 @@ $(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth
 run: $(DSK) monitor
 	@rm -rf $(SHOTS)/$(MACHINE)
 	@cp $(DSK) build/run.dsk
-	mame $(MAME_COMMON) -flop1 build/run.dsk -nothrottle -seconds_to_run $(SECS)
+	$(MAME_HEADLESS) mame $(MAME_COMMON) $(MAME_NOVIDEO) -flop1 build/run.dsk \
+	  -nothrottle -seconds_to_run $(SECS)
 	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
 
 gui: $(DSK) monitor
 	BOOTSPEED=$(SPEED) BOOTFRAMES=$(BOOTFRAMES) \
-	  mame $(MAME_COMMON) -flop1 $(DSK) \
+	  mame $(MAME_COMMON) $(MAME_WINDOW) -flop1 $(DSK) \
 	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
 
 # Type Forth at the console and check machine state afterwards.  Each test is
