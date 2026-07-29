@@ -1179,6 +1179,18 @@ TESTS = {
     files 0
 """,
 
+"shot-inspect": """
+    type : CUBE DUP DUP * * ;
+    type : GREET 42 CUBE DROP ;
+    type SEE CUBE
+    wait 900
+    type SEE GREET
+    wait 900
+    type PAD 24 DUMP
+    wait 600
+    shot
+""",
+
 # --- screenshots for the documentation ------------------------------------
 # Not assertions: each loads an example, runs it, and snapshots what it put
 # on the screen.  Run one at a time and copy shots/apple2ee/0000.png.
@@ -1716,6 +1728,50 @@ TESTS = {
     clear
     type FDEPTH
     stack 0
+""",
+
+# The debugging tax your friend named: an interactive interpreter is not the
+# same as being able to stop and ask what a thing is.
+"inspect": """
+    type $0E00 65 SWAP C! $0E01 66 SWAP C!
+    type $0E00 8 DUMP
+    depth 0
+    clear
+    type ' DUP >NAME NIP
+    stack 3
+    clear
+    type ' DUP >NAME DROP C@
+    stack 68
+    clear
+    type : SQ DUP * ;
+    type SEE SQ
+    wait 600
+    depth 0
+    clear
+    type SEE DUP
+    depth 0
+    clear
+    type SEE NOSUCHWORD
+    depth 0
+""",
+
+# MARKER makes a word that forgets everything after it, itself included.
+"marker": """
+    type MARKER -WORK
+    type : W1 111 ; : W2 222 ;
+    type W1 W2
+    stack 222 111
+    clear
+    type -WORK
+    wait 300
+    type W1
+    depth 0
+    clear
+    type 3 4 +
+    stack 7
+    clear
+    type MARKER -AGAIN : W3 5 ; W3
+    stack 5
 """,
 
 "raw-sectors": """
