@@ -135,11 +135,14 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
   17 0 SECBUF DREAD DROP
   SECBUF 1+ C@ CTRK !  SECBUF 2 + C@ CSEC !
   BEGIN CTRK @ WHILE
-    CTRK @ CSEC @ SECBUF DREAD DROP
-    7 0 DO SECBUF 11 + I 35 * +
-      DUP C@ 0= IF DROP ELSE
-      DUP C@ 255 = IF DROP ELSE CATADD THEN THEN LOOP
-    SECBUF 1+ C@ CTRK !  SECBUF 2 + C@ CSEC !
+    CTRK @ CSEC @ SECBUF DREAD
+    IF 0 CTRK !                 \ a read that failed leaves the sector before
+    ELSE                        \ it in the buffer, and counting that again is
+      7 0 DO SECBUF 11 + I 35 * +   \ how the file count drifted upward
+        DUP C@ 0= IF DROP ELSE
+        DUP C@ 255 = IF DROP ELSE CATADD THEN THEN LOOP
+      SECBUF 1+ C@ SECBUF 2 + C@ CSEC ! CTRK !
+    THEN
   REPEAT ;
 
 \ free sectors, counted out of the VTOC's four-byte-per-track bitmap

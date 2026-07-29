@@ -604,11 +604,6 @@ the failure that arrangement would invite.
 
 ## Known issues
 
-- **`NFILE` over-counts by one after writing a file to a catalog that spans
-  four or more sectors.** The catalog on disk is correct — 23 entries where
-  `CATLOAD` reports 24 — so the fault is in reading it back, not in `SAVE`.
-  It matters because `LOAD` takes the number `CAT` printed. Bounded but not
-  found; the tests work around it by looking files up by name.
 - **Nothing checks for dictionary overflow.** If `HERE` runs past `$BFFF` it
   walks into the I/O page, and writing there throws soft switches.
 - **`tools/dumptext.lua` shows only odd columns.** The console keeps even
