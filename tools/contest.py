@@ -1179,6 +1179,20 @@ TESTS = {
     files 0
 """,
 
+"shot-arc": """
+    load GFXLIB.FTH
+    wait 2400
+    clear
+    type HGR HCLS 3 HCOLOR
+    type 140 96 70 0 360 HARC
+    wait 2400
+    type 380 96 70 0 90 HPIE
+    wait 1200
+    type 380 96 50 100 200 HPIE
+    wait 1200
+    shot
+""",
+
 "shot-inspect": """
     type : CUBE DUP DUP * * ;
     type : GREET 42 CUBE DROP ;
@@ -1772,6 +1786,28 @@ TESTS = {
     clear
     type MARKER -AGAIN : W3 5 ; W3
     stack 5
+""",
+
+# An arc, now that FSIN and FCOS exist.  At zero degrees the point is due
+# right of the centre; at ninety it is directly below, y growing downward.
+"arc": """
+    load GFXLIB.FTH
+    wait 2400
+    clear
+    type HGR HCLS 3 HCOLOR
+    type 280 96 60 0 90 HARC
+    wait 1800
+    type 340 96 HPOINT
+    stack -1
+    clear
+    type 280 156 HPOINT
+    stack -1
+    clear
+    type 220 96 HPOINT
+    stack 0
+    clear
+    type TEXT
+    depth 0
 """,
 
 "raw-sectors": """
