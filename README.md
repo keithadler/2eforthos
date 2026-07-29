@@ -1,6 +1,13 @@
 # 2E FORTH OS
 
-(C) 2026 Keith Adler
+(C) 2026 Keith Adler — [MIT](LICENSE)
+
+Woz handed out the Apple I schematics at Homebrew and printed the whole
+Monitor and Integer BASIC listings in the Red Book, so that anyone who wanted
+to know how it worked could read it. He never asked for anything back, but he
+did put his name on the work. MIT is that arrangement written down.
+
+Apple's ROMs are not covered and are not here — `make roms` rebuilds them.
 
 A Forth system that boots to an **80-column console** on an emulated Apple
 //e, with a **560x192 monochrome double hi-res** screen the language can turn
