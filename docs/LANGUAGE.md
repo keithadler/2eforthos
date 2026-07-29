@@ -478,6 +478,15 @@ read straight after a write fails often enough to matter — the head has just
 been somewhere else and the sector comes round when it comes round — which is
 why DOS retried too. `DERR` holds the last error code.
 
+The retry is only half of it. Nothing in the system calls `DREAD` or `DWRITE`
+directly any more; everything goes through `RD` and `WR`, which return a flag,
+and every caller looks at it and prints `DISK ERROR` rather than carrying on.
+A read whose error is dropped leaves the *previous* sector in the buffer, and
+the code that follows believes it — the catalog walk took a failed read for
+the end of the chain and reported seven files out of twenty-nine with an `OK`
+after it, and the file commands wrote one catalog sector over another.
+Silently, in both cases.
+
 
 
 | Word | Effect | |
@@ -515,8 +524,16 @@ return.
 | `INIT` | | a fresh VTOC and empty catalog |
 
 `INIT` cannot format — writing address fields needs a track writer this
-driver does not have. It marks tracks 0-10 and 17 used, so running it on the
-disk you booted from loses the files and leaves the machine bootable.
+driver does not have. It marks tracks 0 to `SRCEND` and track 17 used, so
+running it on the disk you booted from loses the files and leaves the machine
+bootable.
+
+`SRCEND ( -- t )` is the last track the system's own source occupies, filled
+in by the build. Anything that hands out disk space has to ask rather than
+assume: the source grows with every word added to `system.fth`, and `INIT`
+reserving a fixed eleven tracks — while the source had reached track 12 — is
+exactly how a formatted disk came to put its first file on top of the system
+and stop booting.
 
 `PICSAVE` needs 16K of free dictionary to stage both halves of the screen,
 and says so when it has not got it.

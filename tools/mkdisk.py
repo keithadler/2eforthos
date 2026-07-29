@@ -44,6 +44,13 @@ def mark_used(img, track):
     img[off + 1] = 0
 
 
+def free_tracks_in(img, first, last):
+    """Which of tracks first..last the VTOC still says are free."""
+    base = (VTOC_TRACK * SECTORS + VTOC_SECTOR) * SECTOR + VTOC_BITMAP
+    return [t for t in range(first, last + 1)
+            if img[base + t * 4] or img[base + t * 4 + 1]]
+
+
 def lay(img, image_bytes, track, label, interleave=1):
     """Write a whole image from `track` onward.
 
@@ -65,11 +72,31 @@ def lay(img, image_bytes, track, label, interleave=1):
 
 
 SRCTRACK = 8            # must match tools/mkboot.py
-RESERVED = 11           # tracks 0-10: boot loader, kernel, and the source
+LASTTRACK = 34
 
 
-def reserve(disk, last):
-    """Mark tracks 0..last used, before the filesystem allocates anything.
+def src_last_track(source_bytes):
+    """The last track the boot source lands on.
+
+    Both the reserving pass and the laying pass ask this rather than each
+    carrying its own idea, because they used to disagree.  The reserved
+    count was a constant -- tracks 0-10 -- and the source grew past it: 70
+    sectors is tracks 8 to 12.  Tracks 11 and 12 were therefore still marked
+    free, the filesystem put files on them, and the source was then written
+    straight over those files.
+
+    Nothing complained.  The catalog still listed the file at its full
+    length, the sectors still read back cleanly, and what came off them was
+    a piece of this very source -- so a file simply turned into something
+    else somewhere in its middle.  GFXLIB.FTH was one of the two that
+    landed there, which is why loading it half worked.
+    """
+    sectors = (len(source_bytes) + SECTOR - 1) // SECTOR
+    return SRCTRACK + (sectors - 1) // SECTORS
+
+
+def reserve(disk, source):
+    """Mark every fixed-layout track used, before the filesystem fills up.
 
     The boot loader, the kernel and the system's own source are laid at fixed
     sectors, outside the filesystem entirely -- but the filesystem does not
@@ -78,6 +105,10 @@ def reserve(disk, last):
     each other.  Doing it afterwards, which is what used to happen, sets the
     bitmap right and leaves the file already written underneath the kernel.
     """
+    last = src_last_track(source.read_bytes())
+    if last >= VTOC_TRACK:
+        raise SystemExit(f"boot source reaches track {last}, which is the "
+                         f"catalog at track {VTOC_TRACK}")
     img = bytearray(disk.read_bytes())
     for track in range(last + 1):
         mark_used(img, track)
@@ -87,7 +118,7 @@ def reserve(disk, last):
 
 def main(argv):
     if len(argv) == 4 and argv[1] == "--reserve":
-        reserve(pathlib.Path(argv[2]), int(argv[3]))
+        reserve(pathlib.Path(argv[2]), pathlib.Path(argv[3]))
         return 0
     if len(argv) not in (4, 5, 6):
         print(__doc__)
@@ -108,6 +139,16 @@ def main(argv):
                          f"at track {SRCTRACK}")
     if len(argv) == 6:
         source = pathlib.Path(argv[5]).read_bytes()
+        # The same question the reserving pass asked.  If this ever answers
+        # differently from what was reserved, files have already been written
+        # where the source is about to go, so say so instead of laying it.
+        last = src_last_track(source)
+        used = free_tracks_in(img, SRCTRACK, last)
+        if used:
+            raise SystemExit(
+                f"boot source needs tracks {SRCTRACK}-{last} but the VTOC "
+                f"still calls {used} free -- the reserving pass and the "
+                f"source disagree, and files may be there")
         lay(img, source, SRCTRACK, "boot source", interleave=1)
 
     disk.write_bytes(bytes(img))

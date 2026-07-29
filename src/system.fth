@@ -117,6 +117,38 @@ VARIABLE FX1 VARIABLE FX2 VARIABLE FY1 VARIABLE FY2
   FX1 @ FX2 @ FY1 @ HLINE  FX1 @ FX2 @ FY2 @ HLINE
   FX1 @ FY1 @ FY2 @ HVLINE  FX2 @ FY1 @ FY2 @ HVLINE ;
 
+\ --- talking to the disk ---------------------------------------------------
+\ Nothing below calls DREAD or DWRITE directly; everything goes through these.
+\
+\ They retry.  A read straight after a write fails often enough to matter --
+\ the head has just been somewhere else and the sector comes round when it
+\ comes round -- which is why DOS retried too.  Failing once is not the same
+\ as the sector not being there, and FOPEN refusing a file that LOAD had just
+\ read perfectly well is what made that obvious.
+\
+\ The retry is only half of it.  The other half is that the answer has to be
+\ looked at.  A read whose error is dropped leaves the *previous* sector in
+\ the buffer, and every caller then goes on to believe it: the catalog walk
+\ took a failed read for the end of the chain and quietly reported seven
+\ files out of twenty-nine, and the file commands laid one catalog sector
+\ over another.  Silently, in both cases.  So these return a flag, and the
+\ code below stops and says DISK ERROR rather than carrying on with rubbish.
+VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
+4 CONSTANT DTRIES
+: RD ( t s addr -- ok )
+  RDA ! RDS ! RDT !
+  DTRIES 0 DO
+    RDT @ RDS @ RDA @ DREAD DUP DERR !
+    0= IF -1 UNLOOP EXIT THEN
+  LOOP 0 ;
+: WR ( t s addr -- ok )
+  RDA ! RDS ! RDT !
+  DTRIES 0 DO
+    RDT @ RDS @ RDA @ DWRITE DUP DERR !
+    0= IF -1 UNLOOP EXIT THEN
+  LOOP 0 ;
+: DISKERR ." DISK ERROR " DERR @ . CR ;
+
 \ --- the DOS 3.3 catalog ---------------------------------------------------
 \ SECBUF takes one raw sector; CATBUF holds the parsed catalog as 36-byte
 \ records: type, size, then where the entry came from (catalog track, sector
@@ -138,14 +170,15 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 \ VTOC is track 17 sector 0 and names the first catalog sector; each catalog
 \ sector names the next.  A $00 first byte ends the catalog, $FF is a
 \ deleted entry.
+\ A read that fails is not the end of the chain, and must not be taken for
+\ it: doing that reported a fraction of the disk as the whole of it, with an
+\ OK after it.  Say so instead.
 : CATLOAD 0 NFILE !
-  17 0 SECBUF DREAD DROP
+  17 0 SECBUF RD 0= IF DISKERR EXIT THEN
   SECBUF 1+ C@ CTRK !  SECBUF 2 + C@ CSEC !
   BEGIN CTRK @ WHILE
-    CTRK @ CSEC @ SECBUF DREAD
-    IF 0 CTRK !                 \ a read that failed leaves the sector before
-    ELSE                        \ it in the buffer, and counting that again is
-      7 0 DO SECBUF 11 + I 35 * +   \ how the file count drifted upward
+    CTRK @ CSEC @ SECBUF RD 0= IF DISKERR 0 CTRK ! ELSE
+      7 0 DO SECBUF 11 + I 35 * +
         DUP C@ 0= IF DROP ELSE
         DUP C@ 255 = IF DROP ELSE CATADD THEN THEN LOOP
       SECBUF 1+ C@ SECBUF 2 + C@ CSEC ! CTRK !
@@ -154,7 +187,7 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 
 \ free sectors, counted out of the VTOC's four-byte-per-track bitmap
 : BITS 0 SWAP 8 0 DO DUP 1 AND ROT + SWAP 2/ LOOP DROP ;
-: FREE 17 0 SECBUF DREAD DROP 0
+: FREE 17 0 SECBUF RD 0= IF DISKERR 0 EXIT THEN 0
   35 0 DO SECBUF 56 + I 4 * +
     DUP C@ BITS SWAP 1+ C@ BITS + + LOOP ;
 
@@ -186,31 +219,10 @@ VARIABLE FA
 : FSEC FA @ 2 + C@ FA @ 3 + C@ ;
 : FENTRY SECBUF FA @ 4 + C@ + ;
 
-\ Every command below reads a sector, changes a few bytes and writes it back.
-\ If the read fails and the error is thrown away, what gets written back is
-\ the sector before it -- one catalog sector's contents laid over another,
-\ silently.  That is the same fault CATLOAD had, and it is worse here,
-\ because CATLOAD only miscounted while these destroy.
-\ And they retry.  A read straight after a write fails often enough to
-\ matter -- the head has just been somewhere else and the sector comes round
-\ when it comes round -- which is why DOS retried too.  Failing once is not
-\ the same as the sector not being there, and FOPEN refusing a file that LOAD
-\ had just read perfectly well is what made that obvious.
-VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
-4 CONSTANT DTRIES
-: RD ( t s addr -- ok )
-  RDA ! RDS ! RDT !
-  DTRIES 0 DO
-    RDT @ RDS @ RDA @ DREAD DUP DERR !
-    0= IF -1 UNLOOP EXIT THEN
-  LOOP 0 ;
-: WR ( t s addr -- ok )
-  RDA ! RDS ! RDT !
-  DTRIES 0 DO
-    RDT @ RDS @ RDA @ DWRITE DUP DERR !
-    0= IF -1 UNLOOP EXIT THEN
-  LOOP 0 ;
-: DISKERR ." DISK ERROR " DERR @ . CR ;
+\ Every command below reads a sector, changes a few bytes and writes it back,
+\ which is why each one checks: what gets written back after a read whose
+\ error was ignored is the sector before it, one catalog sector laid over
+\ another.  RD and WR are up with the catalog code.
 
 \ Toggle the lock bit and write the catalog sector back.
 : LOCK FPICK 0= IF EXIT THEN
@@ -240,13 +252,14 @@ VARIABLE FT VARIABLE FS VARIABLE FB
 VARIABLE TLT VARIABLE TLS
 : FREEFILE TLS ! TLT !
   BEGIN TLT @ WHILE
-    TLT @ TLS @ TSBUF DREAD DROP
-    122 0 DO TSBUF 12 + I 2* +
-      DUP C@ 0= IF DROP ELSE
-      DUP C@ SWAP 1+ C@ FREESEC THEN LOOP
-    TSBUF 1+ C@ TSBUF 2 + C@
-    TLT @ TLS @ FREESEC
-    TLS ! TLT !
+    TLT @ TLS @ TSBUF RD 0= IF DISKERR 0 TLT ! ELSE
+      122 0 DO TSBUF 12 + I 2* +
+        DUP C@ 0= IF DROP ELSE
+        DUP C@ SWAP 1+ C@ FREESEC THEN LOOP
+      TSBUF 1+ C@ TSBUF 2 + C@
+      TLT @ TLS @ FREESEC
+      TLS ! TLT !
+    THEN
   REPEAT ;
 
 \ Delete: free the sectors, then mark the catalog entry the way DOS does --
@@ -312,7 +325,7 @@ VARIABLE ALT VARIABLE ALS
 VARIABLE TT VARIABLE TS VARIABLE TN VARIABLE WCNT
 VARIABLE FTT VARIABLE FTS
 : TSCLR TSBUF 256 0 FILL 0 TN ! ;
-: TSFLUSH TT @ TS @ TSBUF DWRITE DROP ;
+: TSFLUSH TT @ TS @ TSBUF WR 0= IF DISKERR THEN ;
 : TSPUT ( t s -- ) TSBUF 12 + TN @ 2* + TUCK 1+ C! C! 1 TN +! ;
 : NEWTS ALLOC
   TT @ 0< 0= IF
@@ -343,7 +356,7 @@ VARIABLE WT VARIABLE WHDRN VARIABLE WNL VARIABLE WNA
     ALLOC OVER 0< IF 2DROP EXIT THEN
     2DUP TSPUT
     WFILL
-    SECBUF DWRITE DROP
+    SECBUF WR 0= IF DISKERR EXIT THEN
     1 WCNT +!
     256 WI +!
   REPEAT ;
@@ -354,11 +367,11 @@ VARIABLE WT VARIABLE WHDRN VARIABLE WNL VARIABLE WNA
 VARIABLE CATE VARIABLE FT2 VARIABLE FS2
 : FINDENT
   0 CATE !
-  17 0 SECBUF DREAD DROP
+  17 0 SECBUF RD 0= IF DISKERR 0 EXIT THEN
   SECBUF 1+ C@ CTRK ! SECBUF 2 + C@ CSEC !
   BEGIN CTRK @ WHILE
     CTRK @ FT2 ! CSEC @ FS2 !
-    CTRK @ CSEC @ SECBUF DREAD DROP
+    CTRK @ CSEC @ SECBUF RD 0= IF DISKERR 0 CTRK ! 0 CATE ! ELSE
     7 0 DO
       CATE @ 0= IF
         SECBUF 11 + I 35 * +
@@ -366,6 +379,7 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
       THEN LOOP
     CATE @ IF 0 CTRK ! ELSE
       SECBUF 1+ C@ SECBUF 2 + C@ CSEC ! CTRK ! THEN
+    THEN
   REPEAT
   CATE @ 0<> ;
 : PUTENT
@@ -518,7 +532,7 @@ VARIABLE IVT
   35 VTOCBUF $34 + C!  16 VTOCBUF $35 + C!
   0 VTOCBUF $36 + C!  1 VTOCBUF $37 + C!
   35 0 DO I IBITS LOOP
-  11 0 DO I IUSED LOOP
+  SRCEND 1+ 0 DO I IUSED LOOP           \ the kernel and the source it streams
   17 IUSED
   17 0 VTOCBUF WR 0= IF DISKERR EXIT THEN
   15 0 DO
@@ -553,21 +567,22 @@ VARIABLE LTOP
                         \ while 80STORE is set -- and the console's firmware
                         \ moves PAGE2 every time it prints a character
   BEGIN LT @ WHILE
-    LT @ LS @ TSBUF DREAD DROP
-    122 0 DO TSBUF 12 + I 2* +
-      DUP C@ 0= IF DROP ELSE
-        LP @ LTOP @ U< IF       \ unsigned: these are addresses, not numbers
-          DUP C@ SWAP 1+ C@ LP @ DREAD DROP  256 LP +!
-        ELSE DROP THEN
-      THEN LOOP
-    TSBUF 1+ C@ TSBUF 2 + C@ LS ! LT !
+    LT @ LS @ TSBUF RD 0= IF DISKERR 0 LT ! ELSE
+      122 0 DO TSBUF 12 + I 2* +
+        DUP C@ 0= IF DROP ELSE
+          LP @ LTOP @ U< IF     \ unsigned: these are addresses, not numbers
+            DUP C@ SWAP 1+ C@ LP @ RD 0= IF DISKERR THEN  256 LP +!
+          ELSE DROP THEN
+        THEN LOOP
+      TSBUF 1+ C@ TSBUF 2 + C@ LS ! LT !
+    THEN
   REPEAT
   0 LP @ C! ;
 
 : LNORM LBUF @ BEGIN DUP C@ ?DUP WHILE 127 AND OVER C! 1+ REPEAT DROP ;
 
 : LOAD ( n -- ) FPICK 0= IF EXIT THEN
-  FSEC SECBUF DREAD DROP
+  FSEC SECBUF RD 0= IF DISKERR EXIT THEN
   LDTOP LTOP !
   LDBUF DUP LBUF ! LP !
   FENTRY DUP C@ SWAP 1+ C@ LSECS
@@ -578,7 +593,7 @@ VARIABLE LTOP
 \ off the front, and hands back the length that header claims.
 VARIABLE BLA
 : BLOAD ( n addr -- len ) BLA ! FPICK 0= IF 0 EXIT THEN
-  FSEC SECBUF DREAD DROP
+  FSEC SECBUF RD 0= IF DISKERR 0 EXIT THEN
   $BF00 LTOP !
   BLA @ LP !
   FENTRY DUP C@ SWAP 1+ C@ LSECS
