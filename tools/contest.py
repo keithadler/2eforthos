@@ -1346,6 +1346,68 @@ TESTS = {
     stack 7
 """,
 
+# The screen is 16K -- $2000-$3FFF in *both* banks -- so BSAVE of 8K saved
+# half a picture and restoring it looked like corruption.  PICSAVE stages
+# both halves into one contiguous 16K block first; this checks the staging,
+# which is the fix.  The write itself is 65 scattered sectors and minutes of
+# seeking, and BSAVE is covered elsewhere.
+"picture": """
+    type HGR HCLS 3 HCOLOR 0 559 96 HLINE
+    wait 300
+    type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
+    stack 127 127
+    clear
+    type MAINBANK $2000 HERE 8192 MOVE
+    wait 300
+    type AUXBANK $2000 HERE 8192 + 8192 MOVE MAINBANK
+    wait 300
+    type HERE $228 + C@ HERE 8192 + $228 + C@
+    stack 127 127
+    clear
+    type HCLS
+    wait 300
+    type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
+    stack 0 0
+    clear
+    type MAINBANK HERE $2000 8192 MOVE
+    wait 300
+    type AUXBANK HERE 8192 + $2000 8192 MOVE MAINBANK
+    wait 300
+    type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
+    stack 127 127
+    clear
+    type TEXT
+    depth 0
+""",
+
+"gfxlib": """
+    load GFXLIB.FTH
+    wait 2400
+    clear
+    type HGR HCLS 3 HCOLOR
+    type 280 96 60 40 HELLIPSE
+    wait 1200
+    nonzero 2228 40
+    clear
+    type HCLS 3 HCOLOR 100 40 HPLOT
+    wait 300
+    type 100 40 HPOINT
+    stack -1
+    clear
+    type HERE 100 40 4 4 BLK-SAVE
+    wait 300
+    type HERE C@
+    stack 1
+    clear
+    type HCLS HERE 200 40 4 4 BLK-REST
+    wait 300
+    type 200 40 HPOINT
+    stack -1
+    clear
+    type TEXT
+    depth 0
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0

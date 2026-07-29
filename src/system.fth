@@ -472,6 +472,26 @@ VARIABLE MKBASE VARIABLE MKLATEST
   R> @ LATEST !
   REINDEX ;
 
+\ --- saving a picture ------------------------------------------------------
+\ The screen is sixteen kilobytes, not eight: the same addresses $2000-$3FFF
+\ in both banks, aux holding the even byte columns and main the odd.  BSAVE
+\ takes one contiguous region, so a plain BSAVE of $2000 gets half a picture
+\ and restoring it looks like corruption.
+\
+\ Both halves are staged into one 16K block above HERE first.  Switching
+\ banks only moves $2000-$3FFF, so the staging area and the code doing the
+\ copying stay put either way.
+$4000 CONSTANT PICLEN
+: PICSAVE ( -- )                        \ asks for a name
+  MAINBANK  $2000 HERE 8192 MOVE
+  AUXBANK   $2000 HERE 8192 + 8192 MOVE
+  MAINBANK  HERE PICLEN BSAVE ;
+: PICLOAD ( n -- )
+  HERE BLOAD DROP
+  MAINBANK  HERE $2000 8192 MOVE
+  AUXBANK   HERE 8192 + $2000 8192 MOVE
+  MAINBANK ;
+
 \ --- the greeting ----------------------------------------------------------
 : HELP
   ." CAT              LIST THE DISK" CR
