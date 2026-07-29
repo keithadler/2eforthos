@@ -145,41 +145,23 @@ W_PTDOTQ:
         .byte   3 | F_IMMED
         .byte   'T', '.', '"'
 W_TDOTQUOTE:
+        jsr     ParseQuoted
+        lda     STATEV
+        ora     STATEV+1
+        beq     @now
         lda     #<W_PTDOTQ
         ldy     #>W_PTDOTQ
         jsr     CommaWord
-        lda     DPV
-        sta     STRLEN
-        lda     DPV+1
-        sta     STRLEN+1
-        lda     #0
-        jsr     CComma                  ; placeholder count byte
-        lda     #0
+        jmp     CommaCountedNext
+@now:   lda     #0
         sta     NCNT
-        ldy     TOIN                    ; skip exactly one delimiting blank
-        cpy     TIBLEN
-        bcs     @done
-        lda     TIB,y
-        cmp     #' '
-        bne     @copy
-        iny
-@copy:  cpy     TIBLEN
-        bcs     @done
-        lda     TIB,y
-        iny
-        cmp     #'"'
+@l:     lda     NCNT
+        cmp     PIDX
         beq     @done
-        sty     YSAV
-        jsr     CComma
-        ldy     YSAV
+        ldy     NCNT
+        lda     SQBUF,y
+        jsr     HgrPutChar
+        inc     TCOL
         inc     NCNT
-        bne     @copy
-@done:  sty     TOIN
-        lda     STRLEN
-        sta     UTMP
-        lda     STRLEN+1
-        sta     UTMP+1
-        lda     NCNT
-        ldy     #0
-        sta     (UTMP),y
-        NEXT
+        bne     @l
+@done:  NEXT

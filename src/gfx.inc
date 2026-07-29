@@ -403,7 +403,8 @@ GfxSpanIf:
         inx
         inx
         jsr     HgrPoint
-        beq     @clear
+        cmp     #0                      ; HgrPoint ends in BIT, which sets Z
+        beq     @clear                  ; from the floating bus, not from A
         lda     #$FF
         sta     0,x
         sta     1,x

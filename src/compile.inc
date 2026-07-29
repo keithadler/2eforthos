@@ -88,8 +88,13 @@ ResolveLeaves:
         jmp     @l
 @done:  rts
 
-; Copy the text from the input buffer up to a closing quote into INBUF.
+; Copy the text from the input buffer up to a closing quote into SQBUF.
 ; A := the length.  One leading blank is skipped, the way the standard says.
+;
+; Its own buffer rather than ASKLN's: an interpreted S" hands back a pointer
+; into this, and the first thing you are likely to do with a string is pass
+; it to something that then asks a question -- which would read the answer
+; over the string.
 ParseQuoted:
         lda     #0
         sta     PIDX
@@ -110,7 +115,7 @@ ParseQuoted:
         ldy     PIDX
         cpy     #INBUFSZ
         bcs     @skip                   ; refuse to overrun the buffer
-        sta     INBUF,y
+        sta     SQBUF,y
         inc     PIDX
 @skip:  ldy     YSAV
         jmp     @copy
@@ -128,19 +133,26 @@ CommaCounted:
         cmp     PIDX
         beq     @done
         ldy     NCNT
-        lda     INBUF,y
+        lda     SQBUF,y
         jsr     CComma
         inc     NCNT
         bne     @l
 @done:  rts
 
-; Push INBUF and its length, for a quoted string met while interpreting.
+; Compile the counted string and carry straight on to the next word.  The
+; two quote words both end this way, and jumping here rather than calling
+; keeps them the same length as the branch that prints instead.
+CommaCountedNext:
+        jsr     CommaCounted
+        jmp     DoNext
+
+; Push SQBUF and its length, for a quoted string met while interpreting.
 PushInbuf:
         dex
         dex
-        lda     #<INBUF
+        lda     #<SQBUF
         sta     0,x
-        lda     #>INBUF
+        lda     #>SQBUF
         sta     1,x
         dex
         dex
@@ -771,6 +783,7 @@ W_ABORTQ:
 ; ---------------------------------------------------------------------------
         .segment "DATA"
 LVMAX   = 32                            ; sixteen pending LEAVEs is plenty
+SQBUF   = $1C00                         ; spare room above the catalog
 LVSTK:  .res    LVMAX
 LVDEPTH: .byte  0
         .segment "CODE"

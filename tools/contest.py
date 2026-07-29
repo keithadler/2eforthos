@@ -26,6 +26,11 @@ ZP   = ROOT / "src" / "zp.inc"
 # $2000 + $400*(96 mod 8) + $80*((96/8) mod 8) + $28*(96/64)
 ROW96 = 0x2228
 
+# Scratch for the memory tests.  $0D00-$0FFF is the only RAM the system
+# leaves alone: the sector buffers end at $0CFF and the catalog starts at
+# $1000.  Anything above the kernel is dictionary and moves as the system
+# grows -- which is how these tests broke the first time.
+
 TESTS = {
 
 "boot": """
@@ -227,14 +232,14 @@ TESTS = {
 """,
 
 "fill-move": """
-    type 8192 16 65 FILL
-    type 8192 C@ 8207 C@
+    type $0D00 16 65 FILL
+    type $0D00 C@ $0D0F C@
     stack 65 65
-    type 2DROP 8192 8300 16 MOVE
-    type 8300 C@ 8315 C@
+    type 2DROP $0D00 $0D80 16 MOVE
+    type $0D80 C@ $0D8F C@
     stack 65 65
-    type 2DROP 8192 8194 8 MOVE
-    type 8194 C@ 8201 C@
+    type 2DROP $0D00 $0D02 8 MOVE
+    type $0D02 C@ $0D09 C@
     stack 65 65
 """,
 
@@ -420,19 +425,179 @@ TESTS = {
 # to be right in both directions.  The tests run on a scratch copy of the
 # image, so writing to it is safe.
 "sector-io": """
-    type $A700 256 65 FILL
+    type $0D00 256 65 FILL
     clear
-    type 34 7 $A700 DWRITE
+    type 34 7 $0D00 DWRITE
     wait 240
     stack 0
     clear
-    type $A800 256 0 FILL
+    type $0E00 256 0 FILL
     clear
-    type 34 7 $A800 DREAD
+    type 34 7 $0E00 DREAD
     wait 240
     stack 0
-    mem A800 65
-    mem A8FF 65
+    mem 0E00 65
+    mem 0EFF 65
+""",
+
+# A box drawn in white, then flooded from a point inside it: the inside
+# fills and the outside must not.
+"flood": """
+    type HGR HCLS 3 HCOLOR
+    type 100 300 40 120 HFRAME
+    type 200 80 HFILL
+    wait 2400
+    type 200 80 HPOINT
+    stack -1
+    clear
+    type 50 80 HPOINT
+    stack 0
+    clear
+    type 101 41 HPOINT
+    stack -1
+    clear
+    type TEXT
+    depth 0
+""",
+
+# Eight pixels a byte, bit 0 leftmost: $FF is a solid row, $81 is its ends.
+"blit": """
+    type CREATE BM $FF C, $81 C, $81 C, $FF C,
+    type HGR HCLS 3 HCOLOR
+    type BM 8 4 100 50 BLIT
+    wait 120
+    type 100 50 HPOINT
+    stack -1
+    clear
+    type 107 50 HPOINT
+    stack -1
+    clear
+    type 101 51 HPOINT
+    stack 0
+    clear
+    type 100 51 HPOINT
+    stack -1
+    clear
+    type TEXT
+    depth 0
+""",
+
+# Drawing a bitmap twice in XOR mode has to leave the screen as it was.
+"blit-xor": """
+    type CREATE BX $FF C, $FF C,
+    type HGR HCLS 3 HCOLOR
+    type BX 8 2 200 60 BLIT
+    type 200 60 HPOINT
+    stack -1
+    clear
+    type -1 HXOR BX 8 2 200 60 BLIT BX 8 2 200 60 BLIT 0 HXOR
+    type 200 60 HPOINT
+    stack -1
+    clear
+    type TEXT
+    depth 0
+""",
+
+"sound-timing": """
+    type CLICK
+    depth 0
+    type 90 40 TONE
+    depth 0
+    type 20 MS
+    depth 0
+    type VBL VBL
+    depth 0
+""",
+
+# Write a file, then read it back through the catalog as source.
+# Write a file from the console, then read it back through the catalog and
+# run what it defined.  SAVE asks for the name, so the line after it is the
+# answer rather than more Forth.
+"save-load": """
+    type S" : NEWWORD 4242 ;" SAVE
+    type SAVED.FTH
+    wait 900
+    check NFILE 7
+    clear
+    type 6 LOAD
+    wait 900
+    clear
+    type NEWWORD
+    stack 4242
+""",
+
+# A binary save keeps DOS's four-byte header, so BLOAD can put it back and
+# say how long it was.
+"bsave-bload": """
+    type $0D00 16 90 FILL
+    clear
+    type $0D00 16 BSAVE
+    type BLOB
+    wait 900
+    check NFILE 7
+    clear
+    type $0E00 16 0 FILL
+    clear
+    type 6 $0E00 BLOAD
+    wait 600
+    stack 16
+    mem 0E00 90
+    mem 0E0F 90
+""",
+
+# HCIRCLE takes the centre then the radius, and leaves the middle empty.
+"circle": """
+    type HGR HCLS 3 HCOLOR 280 96 60 HCIRCLE
+    wait 120
+    type 220 96 HPOINT
+    stack -1
+    clear
+    type 340 96 HPOINT
+    stack -1
+    clear
+    type 280 36 HPOINT
+    stack -1
+    clear
+    type 280 96 HPOINT
+    stack 0
+    clear
+    type TEXT
+""",
+
+# A tall box has to fill all the way to its corners, which is what the seed
+# stack has to be big enough for.
+"flood-big": """
+    type HGR HCLS 3 HCOLOR 40 260 30 120 HFRAME
+    type 150 76 HFILL
+    wait 2400
+    type 41 31 HPOINT
+    stack -1
+    clear
+    type 259 119 HPOINT
+    stack -1
+    clear
+    type 150 76 HPOINT
+    stack -1
+    clear
+    type 20 76 HPOINT
+    stack 0
+    clear
+    type TEXT
+""",
+
+# A quoted string has to say something at the prompt too, not only from
+# inside a definition.
+"dot-quote": """
+    type : SAYS ." IN A DEFINITION" CR ;
+    type SAYS
+    depth 0
+    type ." AT THE PROMPT"
+    depth 0
+    type HGR HCLS 3 HCOLOR 4 10 TAT T." ON THE GRAPHICS SCREEN"
+    wait 120
+    nonzero 2000 8000
+    type TEXT
+    depth 0
 """,
 
 "raw-sectors": """
