@@ -12,7 +12,12 @@ written in each address field.  DOS's skew maps between the two, so a chunk
 destined for physical sector P is written at logical position SKEW[P].  Get
 this wrong and every sector still reads back cleanly, just in the wrong order.
 
-    python3 tools/mkdisk.py disk.dsk boot1.bin forth.bin [interleave]
+    python3 tools/mkdisk.py disk.dsk boot1.bin forth.bin [interleave [src.bin]]
+
+The last argument is the system's own Forth source, which the kernel streams
+a sector at a time rather than carrying in its image.  It goes at SRCTRACK,
+consecutively: a sector takes about a second to compile and the disk turns
+five times in that, so spacing them out would buy nothing.
 """
 
 import pathlib
@@ -59,8 +64,32 @@ def lay(img, image_bytes, track, label, interleave=1):
     return len(chunks)
 
 
+SRCTRACK = 8            # must match tools/mkboot.py
+RESERVED = 11           # tracks 0-10: boot loader, kernel, and the source
+
+
+def reserve(disk, last):
+    """Mark tracks 0..last used, before the filesystem allocates anything.
+
+    The boot loader, the kernel and the system's own source are laid at fixed
+    sectors, outside the filesystem entirely -- but the filesystem does not
+    know that, and DOS will happily put a file wherever the VTOC says is
+    free.  Marking them used first is what keeps the two from writing over
+    each other.  Doing it afterwards, which is what used to happen, sets the
+    bitmap right and leaves the file already written underneath the kernel.
+    """
+    img = bytearray(disk.read_bytes())
+    for track in range(last + 1):
+        mark_used(img, track)
+    disk.write_bytes(bytes(img))
+    print(f"  reserved tracks 0-{last} before the filesystem was filled")
+
+
 def main(argv):
-    if len(argv) not in (4, 5):
+    if len(argv) == 4 and argv[1] == "--reserve":
+        reserve(pathlib.Path(argv[2]), int(argv[3]))
+        return 0
+    if len(argv) not in (4, 5, 6):
         print(__doc__)
         return 2
     disk = pathlib.Path(argv[1])
@@ -72,8 +101,14 @@ def main(argv):
     boot = pathlib.Path(argv[2]).read_bytes()
     lay(img, boot, 0, "boot loader")
     kernel = pathlib.Path(argv[3]).read_bytes()
-    step = int(argv[4]) if len(argv) == 5 else 3
-    lay(img, kernel, 1, "kernel", interleave=step)
+    step = int(argv[4]) if len(argv) >= 5 else 3
+    used = lay(img, kernel, 1, "kernel", interleave=step)
+    if used > SRCTRACK * SECTORS:
+        raise SystemExit(f"kernel is {used} sectors and runs into the source "
+                         f"at track {SRCTRACK}")
+    if len(argv) == 6:
+        source = pathlib.Path(argv[5]).read_bytes()
+        lay(img, source, SRCTRACK, "boot source", interleave=1)
 
     disk.write_bytes(bytes(img))
     return 0

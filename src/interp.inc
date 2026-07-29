@@ -143,6 +143,44 @@ CommaCodeField:
 ; Input
 ; ---------------------------------------------------------------------------
 
+; Read the next sector of the system's own source into SRCBUF and point SRC
+; at it.  Carry set means there are none left.
+;
+; The sectors are laid down consecutively from SRCTRACK with no interleave:
+; compiling one takes about a second and the disk turns five times in that,
+; so where the next sector sits makes no difference to how long it is waited
+; for.  X belongs to the Forth stack and the caller parks it.
+NextSrcSector:
+        lda     SRCIDX
+        cmp     #SRCSECS
+        bcs     @none
+        lsr     a                       ; sixteen sectors to the track
+        lsr     a
+        lsr     a
+        lsr     a
+        clc
+        adc     #SRCTRACK
+        sta     D2TRK
+        lda     SRCIDX
+        and     #$0F
+        sta     D2SEC
+        lda     #<SRCBUF
+        sta     D2PTR
+        lda     #>SRCBUF
+        sta     D2PTR+1
+        jsr     D2ReadSector
+        inc     SRCIDX
+        lda     #<SRCBUF
+        sta     SRC
+        lda     #>SRCBUF
+        sta     SRC+1
+        clc
+        rts
+@none:  lda     #0
+        sta     SRC+1
+        sec
+        rts
+
 ; Advance the bootstrap source pointer.
 BumpSrc:
         inc     SRC
@@ -177,8 +215,15 @@ Refill:
 @eol:   jsr     BumpSrc
         rts
 @exhausted:
-        lda     #0
-        sta     SRC+1                   ; from here on, read the keyboard
+        ; The end of a sector, not the end of the source: no line crosses a
+        ; sector boundary, so nothing has been copied into TIB yet and the
+        ; next sector can simply be read and the line taken from that.
+        stx     XSAV
+        jsr     NextSrcSector
+        ldx     XSAV
+        bcs     @nomore
+        jmp     Refill
+@nomore:
         rts
 
 @kbd:   lda     #$BE                    ; '>' prompt, high bit set for COUT

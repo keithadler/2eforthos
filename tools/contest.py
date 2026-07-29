@@ -700,6 +700,13 @@ TESTS = {
     stack 12 8
 """,
 
+# How much dictionary a fresh boot leaves.  The whole point of streaming the
+# source off the disk rather than carrying it in the image.
+"headroom": """
+    type $BF00 HERE - 10000 >
+    stack -1
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0

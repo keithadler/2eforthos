@@ -10,6 +10,7 @@
 ;
 ;   $0400-$07FF   the text screen, in both banks -- the 80-column firmware
 ;                 puts even columns in aux and odd ones in main
+;   $0D00-$0DFF   one sector of the system's own source, while booting
 ;   $0800-$0FFF   one raw disk sector
 ;   $1000-$1FFF   the parsed catalog, 36 bytes per file
 ;   $2000-$3FFF   hi-res page 1 -- in BOTH banks: aux and main interleave
@@ -21,6 +22,7 @@
 ; ---------------------------------------------------------------------------
 
 .include "zp.inc"
+.include "srcsecs.inc"       ; SRCSECS, SRCTRACK -- where the source lives
 .include "dict.inc"
 
         .segment "STARTUP"
@@ -47,10 +49,11 @@ ColdStart:
         jsr     PutStr
         jsr     BuildIndex              ; hash the built-in dictionary
         jsr     D2BuildTable            ; invert the 6-and-2 nibble table
-        lda     #<BOOTSRC               ; the interpreter reads this first,
-        sta     SRC                     ; then switches to the keyboard
-        lda     #>BOOTSRC
-        sta     SRC+1
+        lda     #0                      ; the system's own source is on the
+        sta     SRCIDX                  ; disk; read the first sector of it
+        stx     XSAV                    ; and let the interpreter compile
+        jsr     NextSrcSector           ; itself before the keyboard is read
+        ldx     XSAV
         jmp     Quit
 
         .segment "CODE"
@@ -74,12 +77,11 @@ ColdStart:
 ; This is only what the kernel says while it is still building it.
 BANNER: .byte   "INITIALIZING...", $0D, $00
 
-; The system's own source, interpreted at boot before the keyboard is read.
-; Written as real Forth in src/system.fth and converted by tools/mkboot.py.
-.include "bootsrc.inc"
 
 ; ---------------------------------------------------------------------------
         .segment "DATA"
+
+SRCIDX:  .byte  0                       ; which source sector comes next
 
 TIBLEN:  .byte  0                       ; characters in the terminal buffer
 TOIN:    .byte  0                       ; parse offset into it
