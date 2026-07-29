@@ -44,6 +44,7 @@ FOUT    = $ED34                 ; FAC -> string at $0100, NUL terminated
 
 FACEXP  = $9D                   ; FAC, five bytes plus a sign byte
 FACINT  = $A0                   ; where AYINT leaves the integer
+FACSGN  = $A2                   ; and the sign byte
 
 ; --- the float stack -------------------------------------------------------
 ; Eight five-byte floats.  Separate from the data stack, because a float does
@@ -143,12 +144,31 @@ FFACToTop:
         jsr     FPSaveZ
         ROMIN
         jsr     FTopToFAC
+        ; AYINT does not merely fail on a number too big for a cell -- it
+        ; jumps into Applesoft's error handler, which on a machine with no
+        ; Applesoft under it goes somewhere unrecoverable.  Its own range
+        ; check is the exponent against $90, so do that first and saturate.
+        lda     FACEXP
+        cmp     #$90
+        bcs     @big
         jsr     AYINT
         lda     FACINT
         sta     FTMP+1
         lda     FACINT+1
         sta     FTMP
-        ROMOUT
+        jmp     @out
+@big:   lda     FACSGN
+        bmi     @neg
+        lda     #$FF
+        sta     FTMP
+        lda     #$7F
+        sta     FTMP+1
+        jmp     @out
+@neg:   lda     #$00
+        sta     FTMP
+        lda     #$80
+        sta     FTMP+1
+@out:   ROMOUT
         jsr     FPRestoreZ
         ldx     XSAV
         lda     FPSP
@@ -176,6 +196,100 @@ FFACToTop:
         lda     #0
         sta     1,x
         NEXT
+
+; --- shuffling floats about ------------------------------------------------
+; Without these the arithmetic words are unusable for anything with a shape:
+; a formula needs its operands more than once.  A float is five bytes, so
+; these move bytes rather than cells and do not touch the ROM at all.
+
+; TMP1 := the address of float A
+FSlot1:
+        tay
+        lda     FOFF,y
+        clc
+        adc     #<FSTK
+        sta     TMP1
+        lda     #>FSTK
+        adc     #0
+        sta     TMP1+1
+        rts
+
+; TMP2 := the address of float A
+FSlot2:
+        tay
+        lda     FOFF,y
+        clc
+        adc     #<FSTK
+        sta     TMP2
+        lda     #>FSTK
+        adc     #0
+        sta     TMP2+1
+        rts
+
+FCopy:                                  ; (TMP1) -> (TMP2), five bytes
+        ldy     #4
+@l:     lda     (TMP1),y
+        sta     (TMP2),y
+        dey
+        bpl     @l
+        rts
+
+        prim    "FDUP", W_FDUP, 0
+        lda     FPSP
+        beq     @none
+        cmp     #FDEPTH
+        bcs     @none
+        sec
+        sbc     #1
+        jsr     FSlot1
+        lda     FPSP
+        jsr     FSlot2
+        jsr     FCopy
+        inc     FPSP
+@none:  NEXT
+
+        prim    "FSWAP", W_FSWAP, 0
+        lda     FPSP
+        cmp     #2
+        bcc     @none
+        sec                             ; the top into the scratch slot
+        sbc     #1
+        jsr     FSlot1
+        lda     #FDEPTH
+        jsr     FSlot2
+        jsr     FCopy
+        lda     FPSP                    ; the one under it to the top
+        sec
+        sbc     #2
+        jsr     FSlot1
+        lda     FPSP
+        sec
+        sbc     #1
+        jsr     FSlot2
+        jsr     FCopy
+        lda     #FDEPTH                 ; and the scratch down
+        jsr     FSlot1
+        lda     FPSP
+        sec
+        sbc     #2
+        jsr     FSlot2
+        jsr     FCopy
+@none:  NEXT
+
+        prim    "FOVER", W_FOVER, 0
+        lda     FPSP
+        cmp     #2
+        bcc     @none
+        cmp     #FDEPTH
+        bcs     @none
+        sec
+        sbc     #2
+        jsr     FSlot1
+        lda     FPSP
+        jsr     FSlot2
+        jsr     FCopy
+        inc     FPSP
+@none:  NEXT
 
 ; A unary ROM operation on the top float.  The address to call is patched in.
 FUnary:
@@ -378,7 +492,7 @@ CALLV:   jmp    $0000                    ; patched, then called
 FPSP:     .byte  0                        ; floats on the stack
 FTMP:    .word  0
 FZSAVE:  .res   93                       ; the whole of $50-$AC
-FSTK:    .res   FDEPTH * 5
-FOFF:    .byte  0, 5, 10, 15, 20, 25, 30, 35
+FSTK:    .res   (FDEPTH + 1) * 5         ; one spare, for FSWAP
+FOFF:    .byte  0, 5, 10, 15, 20, 25, 30, 35, 40
 FCALL:   jmp    $0000                    ; patched, then called
         .segment "CODE"
