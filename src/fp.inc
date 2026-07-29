@@ -275,8 +275,106 @@ FBinary:
         dec     FPSP
 :       NEXT
 
+; --- calling anything -----------------------------------------------------
+; CALL runs a subroutine with the machine as it stands.  ROMCALL switches the
+; ROM back first, which is what anything at $D000-$FFFF needs -- and saves
+; the zero page Applesoft treads on, because that is the usual reason to want
+; it.  X is the Forth stack pointer and is parked across both.
+        prim    "CALL", W_CALL, 0       ; addr --
+        lda     0,x
+        sta     CALLV+1
+        lda     1,x
+        sta     CALLV+2
+        inx
+        inx
+        stx     XSAV
+        jsr     CALLV
+        ldx     XSAV
+        NEXT
+
+        prim    "ROMCALL", W_ROMCALL, 0 ; addr --
+        lda     0,x
+        sta     CALLV+1
+        lda     1,x
+        sta     CALLV+2
+        inx
+        inx
+        stx     XSAV
+        jsr     FPSaveZ
+        ROMIN
+        jsr     CALLV
+        ROMOUT
+        jsr     FPRestoreZ
+        ldx     XSAV
+        NEXT
+
+; CALL-A passes a byte in the accumulator and brings back whatever comes out,
+; which is how most of the monitor's entry points are spoken to.
+        prim    "CALL-A", W_CALLA, 0    ; n addr -- n
+        lda     0,x
+        sta     CALLV+1
+        lda     1,x
+        sta     CALLV+2
+        inx
+        inx
+        lda     0,x
+        stx     XSAV
+        jsr     CALLV
+        ldx     XSAV
+        sta     0,x
+        lda     #0
+        sta     1,x
+        NEXT
+
+; --- random ---------------------------------------------------------------
+; A sixteen-bit xorshift.  Applesoft's RND is in the ROM and would need the
+; card switched out for every call; this is a dozen instructions and gives
+; the same period without leaving main memory.  Seeded to something non-zero,
+; because xorshift from zero stays there.
+        prim    "RND", W_RND, 0         ; -- u
+        lda     RSEED                   ; x ^= x << 7
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        eor     RSEED+1
+        sta     RSEED+1
+        lda     RSEED+1                 ; x ^= x >> 9
+        lsr     a
+        eor     RSEED
+        sta     RSEED
+        lda     RSEED                   ; x ^= x << 8
+        eor     RSEED+1
+        sta     RSEED+1
+        dex
+        dex
+        lda     RSEED
+        sta     0,x
+        lda     RSEED+1
+        sta     1,x
+        NEXT
+
+        prim    "RND-SEED!", W_RNDSEED, 0
+        lda     0,x
+        ora     1,x
+        bne     :+
+        lda     #$A5                    ; zero would stick
+        sta     0,x
+:       lda     0,x
+        sta     RSEED
+        lda     1,x
+        sta     RSEED+1
+        inx
+        inx
+        NEXT
+
 ; ---------------------------------------------------------------------------
         .segment "DATA"
+RSEED:   .word  $A5C3
+CALLV:   jmp    $0000                    ; patched, then called
 FPSP:     .byte  0                        ; floats on the stack
 FTMP:    .word  0
 FZSAVE:  .res   93                       ; the whole of $50-$AC

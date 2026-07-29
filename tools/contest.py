@@ -1538,6 +1538,61 @@ TESTS = {
     stack -1
 """,
 
+# CALL runs a subroutine; ROMCALL switches the ROM back first, which is what
+# anything at $D000-$FFFF needs now the card holds the dictionary.  $FC58 is
+# the monitor's HOME.  $FBE4 is BELL, which returns harmlessly.
+"call": """
+    type $FBE4 ROMCALL
+    depth 0
+    clear
+    type 3 4 + $FBE4 ROMCALL
+    stack 7
+    clear
+    type $FC58 ROMCALL 5 6 *
+    stack 30
+""",
+
+# A sixteen-bit xorshift: same value from the same seed, different values in
+# sequence, and everything lands inside the range asked for.
+"random": """
+    type 1 RND-SEED! RND 0<>
+    stack -1
+    clear
+    type 1 RND-SEED! RND 1 RND-SEED! RND =
+    stack -1
+    clear
+    type 1 RND-SEED! RND RND =
+    stack 0
+    clear
+    type 7 RND-SEED! 0 10 RND-RANGE 0 10 RND-RANGE 0 10 RND-RANGE
+    depth 3
+    clear
+    type 7 RND-SEED! 0 10 RND-RANGE 11 U<
+    stack -1
+    clear
+    type 5 5 RND-RANGE
+    stack 5
+""",
+
+# A line at a time, which is what interchanging a text file with anything
+# else needs.  TEST.FTH's first line is a backslash comment.
+"file-lines": """
+    loadwith TEST.FTH FOPEN
+    wait 1200
+    clear
+    type PAD 80 DFGETS
+    stack 0 62
+    clear
+    type PAD C@ PAD 1+ C@
+    stack 32 92
+    clear
+    type PAD 80 DFGETS DROP 0>
+    stack -1
+    clear
+    type FCLOSE
+    depth 0
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
