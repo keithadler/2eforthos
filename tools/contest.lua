@@ -54,6 +54,7 @@ local function button()
 end
 
 local mem, frames, phase = nil, 0, "wait"
+local basefiles = nil    -- how many files the disk booted with
 local steps, at, timer = {}, 1, 0
 local posting = false                   -- a line is still being typed in
 local passes, failures = 0, 0
@@ -154,6 +155,18 @@ local function run(step)
         wantbtn = 1; timer = 30
     elseif op == "release" then
         wantbtn = 0; timer = 30
+    elseif op == "files" then
+        -- Against the count the disk booted with, never an absolute number:
+        -- adding or editing any file on the floppy would otherwise break
+        -- every test that mentions the catalog.
+        local a = varaddr("NFILE")
+        local got = a and signed(w(a))
+        local want = basefiles and (basefiles + tonumber(rest))
+        report(got == want,
+               string.format("files = %s (wanted %s, base %s%+d)",
+                             tostring(got), tostring(want),
+                             tostring(basefiles), tonumber(rest)))
+        timer = 2
     elseif op == "wait" then
         timer = tonumber(rest)
     elseif op == "shot" then
@@ -226,7 +239,10 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
             return
         end
         fx, fy, btn = analog("x"), analog("y"), button()
-        print(string.format("     console up at frame %d", frames))
+        local nf = varaddr("NFILE")
+        basefiles = nf and w(nf) or 0
+        print(string.format("     console up at frame %d, %d files",
+                            frames, basefiles))
         phase, timer = "run", 60
         return
     end

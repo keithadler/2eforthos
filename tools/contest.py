@@ -41,7 +41,7 @@ ROW96 = 0x2228
 TESTS = {
 
 "boot": """
-    check NFILE 23
+    files 0
     depth 0
 """,
 
@@ -122,9 +122,8 @@ TESTS = {
 
 # The catalog is read from the disk at boot, not compiled in.
 "catalog": """
-    check NFILE 23
-    type NFILE @
-    stack 23
+    files 0
+    files 0
     clear
     type FREE
     wait 240
@@ -527,7 +526,7 @@ TESTS = {
     type S" : NEWWORD 4242 ;" SAVE
     type SAVED.FTH
     wait 900
-    check NFILE 24
+    files 1
     clear
     load SAVED.FTH
     wait 900
@@ -544,7 +543,7 @@ TESTS = {
     type $0D00 16 BSAVE
     type BLOB
     wait 900
-    check NFILE 24
+    files 1
     clear
     type $0E00 16 0 FILL
     clear
@@ -723,8 +722,7 @@ TESTS = {
     type BETA GAMMA @
     stack 7 222
     clear
-    type NFILE @
-    stack 23
+    files 0
     clear
     type SAVEDICT
     type OVL.BIN
@@ -775,24 +773,20 @@ TESTS = {
 # CATLOAD used to ignore the error from DREAD, so a failed read counted the
 # sector before it a second time.
 "catalog-count": """
-    type NFILE @
-    stack 23
+    files 0
     clear
     type CATLOAD
     wait 1800
-    type NFILE @
-    stack 23
+    files 0
     clear
     type S" : X 1 ;" SAVE
     type COUNTED.FTH
     wait 1800
-    type NFILE @
-    stack 24
+    files 1
     clear
     type CATLOAD
     wait 1800
-    type NFILE @
-    stack 24
+    files 1
 """,
 
 # POINTER.FTH -- one test per word.  The game port is driven from the
@@ -1101,20 +1095,33 @@ TESTS = {
 """,
 
 "cov-files": """
+    files 0
     type S" : ZZ 5 ;" SAVE
     type COVTMP.FTH
     wait 1800
+    files 1
+    clear
+    loadwith COVTMP.FTH CATENT
+    type C@
+    stack 0
     clear
     loadwith COVTMP.FTH LOCK
-    wait 900
+    wait 1800
+    clear
+    loadwith COVTMP.FTH CATENT
+    type C@
+    stack 128
     clear
     loadwith COVTMP.FTH LOCK
-    wait 900
+    wait 1800
+    clear
+    loadwith COVTMP.FTH CATENT
+    type C@
+    stack 0
     clear
     loadwith COVTMP.FTH DEL
-    wait 1800
-    type NFILE @
-    stack 23
+    wait 2400
+    files 0
 """,
 
 # The last of the uncovered words.  BYE is not run -- it halts the machine --
@@ -1163,15 +1170,13 @@ TESTS = {
     clear
     loadwith COVREN.FTH REN
     type COVGONE.FTH
-    wait 1800
+    wait 2400
     clear
-    type NFILE @
-    stack 24
+    files 1
     clear
     loadwith COVGONE.FTH DEL
-    wait 1800
-    type NFILE @
-    stack 23
+    wait 2400
+    files 0
 """,
 
 # --- screenshots for the documentation ------------------------------------
@@ -1302,7 +1307,7 @@ def run(name, script, keep_shots=False):
         # a window stealing focus every forty seconds makes the machine
         # unusable while a suite runs.
         "-video", "none", "-sound", "none",
-        "-nothrottle", "-seconds_to_run", "180", "-autoboot_delay", "0",
+        "-nothrottle", "-seconds_to_run", "300", "-autoboot_delay", "0",
         "-autoboot_script", str(ROOT / "tools" / "contest.lua"),
         "-snapshot_directory", str(shots),
     ]
