@@ -606,6 +606,20 @@ VARIABLE MKBASE VARIABLE MKLATEST
   R> @ LATEST !
   REINDEX ;
 
+\ --- lo-res lines ----------------------------------------------------------
+\ Forty blocks across and forty-eight down -- but in GR the bottom four text
+\ rows are the console's, so rows 40-47 belong to it and anything drawn there
+\ is scrolled over.  GR-FULL shows all forty-eight; the console still writes
+\ into the bottom of it, it is simply not displayed.
+\
+\ Forty blocks across and forty-eight down, so a span is a short loop and
+\ GPLOT does the masking.  GR is the right screen for a bar chart: two
+\ blocks to a byte and no shifting, against 560 pixels that need both.
+VARIABLE GLA VARIABLE GLB
+: GHLIN ( x1 x2 y -- ) GLA ! GLB ! GLB @ 1+ SWAP ?DO I GLA @ GPLOT LOOP ;
+: GVLIN ( y1 y2 x -- ) GLA ! GLB ! GLB @ 1+ SWAP ?DO GLA @ I GPLOT LOOP ;
+: GBAR ( x y n -- ) OVER + 1- SWAP ROT SWAP SWAP GVLIN ;
+
 \ --- saving a picture ------------------------------------------------------
 \ The screen is sixteen kilobytes, not eight: the same addresses $2000-$3FFF
 \ in both banks, aux holding the even byte columns and main the odd.  BSAVE
@@ -615,12 +629,23 @@ VARIABLE MKBASE VARIABLE MKLATEST
 \ Both halves are staged into one 16K block above HERE first.  Switching
 \ banks only moves $2000-$3FFF, so the staging area and the code doing the
 \ copying stay put either way.
+\
+\ That wants sixteen kilobytes free, and the kernel has grown enough today
+\ that a fresh boot no longer has them -- so PICROOM checks and says so.
+\ Writing the file from the two halves in place would need the file writer
+\ to take two regions, which it does not; until it does, this is honest
+\ rather than working.
 $4000 CONSTANT PICLEN
+: PICROOM ( -- ok )
+  UNUSED PICLEN < IF
+    ." NEEDS 16K FREE, HAS " UNUSED . CR 0 ELSE -1 THEN ;
 : PICSAVE ( -- )                        \ asks for a name
+  PICROOM 0= IF EXIT THEN
   MAINBANK  $2000 HERE 8192 MOVE
   AUXBANK   $2000 HERE 8192 + 8192 MOVE
   MAINBANK  HERE PICLEN BSAVE ;
 : PICLOAD ( n -- )
+  PICROOM 0= IF DROP EXIT THEN
   HERE BLOAD DROP
   MAINBANK  HERE $2000 8192 MOVE
   AUXBANK   HERE 8192 + $2000 8192 MOVE

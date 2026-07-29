@@ -97,6 +97,7 @@ ColdStart:
 .include "text.inc"
 .include "gfx.inc"
 .include "fill.inc"
+.include "lores.inc"
 .include "sound.inc"
 
 ; ---------------------------------------------------------------------------

@@ -56,6 +56,9 @@ D2PTR       = $E2               ; 2  where a decoded sector goes
 ; --- icons -----------------------------------------------------------------
 IPTR        = $E4               ; 2  into the icon bitmap table
 
+; --- lo-res ----------------------------------------------------------------
+GPTR        = $E6               ; 2  the text-page row being plotted into
+
 ; --- outer interpreter -----------------------------------------------------
 SRC         = $CE               ; 2  general source pointer
 UTMP        = $D0               ; 2
