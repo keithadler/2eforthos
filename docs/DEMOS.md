@@ -261,6 +261,20 @@ compiler already had.
 | `PADDLE.FTH` | the game port, and plotting what it says |
 | `DISKIO.FTH` | raw sectors, and writing a file |
 
+**Charts on the lo-res screen.** `CHART.FTH` — `BARS` and `STACKED`, built
+on `GBAR` and the `DATA`/`READ` table. Lo-res is the text page seen
+differently, two blocks to a byte, which is why a chart belongs here rather
+than in 560 pixels.
+
+![a bar chart](images/ex-chart.png)
+
+The stripes are the emulator, not the code: `make monitor` configures a
+monochrome screen, so sixteen colours come out as sixteen dither patterns.
+`make MONITOR=1 monitor` for colour.
+
+**Floating point.** `FLOAT.FTH` — `CONSTANTS`, `TRIG` and `ROOTS`, computed
+by Applesoft's own routines. π is four times the arctangent of one.
+
 **Arcs and pie slices.** `HARC` and `HPIE` in `GFXLIB.FTH`, written the
 parametric way now that `FSIN` and `FCOS` exist — pi is four times the
 arctangent of one, which is exact rather than a constant somebody typed in.

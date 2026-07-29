@@ -28,11 +28,18 @@ so `ALIGN` and `ALIGNED` are here to be spelled rather than to act.
 - [Control flow](#control-flow)
 - [Text and numbers out](#text-and-numbers-out)
 - [Input](#input)
+- [Floating point](#floating-point)
 - [The graphics screen](#the-graphics-screen)
+- [The lo-res screen](#the-lo-res-screen)
 - [Text on the graphics screen](#text-on-the-graphics-screen)
 - [Sound and timing](#sound-and-timing)
 - [The disk](#the-disk)
 - [Files](#files)
+- [Inline tables of numbers](#inline-tables-of-numbers)
+- [Calling machine code](#calling-machine-code)
+- [Random](#random)
+- [Looking at things](#looking-at-things)
+- [Precompiled overlays](#precompiled-overlays)
 - [System variables and internals](#system-variables-and-internals)
 
 ---
@@ -321,6 +328,39 @@ its capacitor has discharged, so a small reading returns early and leaves the
 shared timer still charged — and the next channel then reads back skewed by
 the first.
 
+## Floating point
+
+Five-byte floats on their own stack, eight deep, computed by Applesoft's own
+routines in the ROM. The language card holds the dictionary, so every one of
+these switches the ROM back for the length of the call and saves the zero
+page Applesoft treads on — which is why they are machine code and none of
+them can be a colon definition.
+
+`F>S` **truncates**: `1 S>F FEXP F>S` is 2, not 3. It saturates rather than
+overflowing, because Applesoft's own converter jumps into an error handler
+this machine has nothing under.
+
+| Word | Effect | |
+|---|---|---|
+| `S>F` | `( n -- )` | push an integer as a float |
+| `F>S` | `( -- n )` | pop one as an integer, truncating |
+| `FDUP` `FDROP` `FSWAP` `FOVER` | | the float stack |
+| `FDEPTH` | `( -- n )` | how many floats |
+| `F+` `F-` `F*` `F/` | | arithmetic |
+| `FSQRT` | | square root |
+| `FSIN` `FCOS` `FTAN` `FATN` | | radians |
+| `FLN` `FEXP` | | natural log and its inverse |
+| `F.` | | print and drop |
+
+```forth
+144 S>F FSQRT F>S .              \ 12
+1 S>F FATN 4 S>F F* 1000 S>F F* F>S .    \ 3141
+22 S>F 7 S>F F/ F.              \ 3.14285714
+```
+
+There is no `**`. `x` to the `n` is `FLN`, multiply, `FEXP` — which is what
+Applesoft's own `^` does. `IPOW` is the exact integer version.
+
 ## The graphics screen
 
 560 by 192, monochrome, one bit per pixel. `HGR` turns it on and `TEXT`
@@ -385,6 +425,28 @@ screen.
 | `TINV` | `( flag -- )` | inverse video |
 | `T." ..."` | | print, compiling or not |
 
+## The lo-res screen
+
+40 by 48 in sixteen colours, and much faster than double hi-res because it
+is the text page seen differently: two blocks to a byte, no shifting. The
+right screen for a bar chart.
+
+`GR` keeps four lines of text at the bottom, so **rows 40-47 belong to the
+console** and anything drawn there is scrolled over. `GR-FULL` shows all
+forty-eight. `TEXT` brings the 80-column console back.
+
+| Word | Effect | |
+|---|---|---|
+| `GR` | | lo-res with four text lines |
+| `GR-FULL` | | all 48 rows |
+| `GCLS` | `( n -- )` | clear to a colour |
+| `GCOLOR!` | `( n -- )` | 0-15 |
+| `GPLOT` | `( x y -- )` | |
+| `GSCRN` | `( x y -- n )` | read a block back |
+| `GHLIN` | `( x1 x2 y -- )` | |
+| `GVLIN` | `( y1 y2 x -- )` | |
+| `GBAR` | `( x y n -- )` | a bar n tall, for charts |
+
 ## Sound and timing
 
 | Word | Effect | |
@@ -427,6 +489,31 @@ time: the VTOC is sector 0 and the first catalog sector is 15.
 
 ## Files
 
+Reading a file a byte or a line at a time, for data rather than source.
+`FGETC` hands back every byte of every sector the file was allocated, high
+bit and all — DOS keeps no byte count for a text file, so where one stops is
+the caller's business. `DFGETS` strips the high bit and stops at a carriage
+return.
+
+| Word | Effect | |
+|---|---|---|
+| `FOPEN` | `( n -- ok )` | one file at a time |
+| `FGETC` | `( -- c )` | -1 at the end |
+| `FREAD` | `( addr n -- got )` | |
+| `DFGETS` | `( addr n -- got eof )` | one line |
+| `FEOF?` | `( -- f )` | |
+| `FCLOSE` | | |
+| `PICSAVE` | | write the whole 16K screen, both banks |
+| `PICLOAD` | `( n -- )` | read one back |
+| `INIT` | | a fresh VTOC and empty catalog |
+
+`INIT` cannot format — writing address fields needs a track writer this
+driver does not have. It marks tracks 0-10 and 17 used, so running it on the
+disk you booted from loses the files and leaves the machine bootable.
+
+`PICSAVE` needs 16K of free dictionary to stage both halves of the screen,
+and says so when it has not got it.
+
 | Word | Effect | |
 |---|---|---|
 | `CAT` | | list the disk |
@@ -464,6 +551,98 @@ S" : HELLO 1234 ;" SAVE
 
 It asks for a name; `CAT` then shows it, and `n LOAD` reads it back and
 defines `HELLO`.
+
+## Recovering from a failure
+
+Without these an error takes the whole line down and clears the stack: a word
+cannot try something and recover. `CATCH` remembers where both stacks were
+and hands that to `THROW`, which puts them back and returns through `CATCH`
+rather than through whatever was in the middle.
+
+| Word | Effect | |
+|---|---|---|
+| `CATCH` | `( xt -- 0 \| n )` | run it; 0 if it finished |
+| `THROW` | `( n -- )` | give up, back to the `CATCH` |
+| `SP@` `SP!` | `( -- addr )` `( addr -- )` | the data stack pointer |
+| `RP@` `RP!` | `( -- addr )` `( addr -- )` | the return stack pointer |
+| `PAD` | `( -- addr )` | 256 bytes of scratch at `$0F00` |
+
+```forth
+: RISKY 42 THROW ;
+' RISKY CATCH .          \ 42
+' NOTHING-WRONG CATCH .  \ 0
+```
+
+`THROW` with zero does nothing, so a word can `THROW` a status without
+knowing whether it is an error.
+
+**The system's own words do not use these yet.** `LOCK`, `DEL`, `REN` and
+the file writer print a message and stop; a caller has to read `DERR` to
+tell success from failure.
+
+## Inline tables of numbers
+
+Applesoft's `DATA` and `READ`. The values go into the dictionary between
+`DATA:` and `;DATA`.
+
+| Word | Effect | |
+|---|---|---|
+| `DATA:` | | start a table at `HERE` |
+| `+VAL` | `( n -- )` | add a value |
+| `;DATA` | | finish, and rewind |
+| `READ-VAL` | `( -- n )` | the next one, 0 when exhausted |
+| `RESTORE-DATA` | | rewind |
+| `DATA#` | `( -- n )` | how many |
+
+## Calling machine code
+
+| Word | Effect | |
+|---|---|---|
+| `CALL` | `( addr -- )` | run a subroutine as things stand |
+| `ROMCALL` | `( addr -- )` | switch the ROM back first, and save zero page |
+| `CALL-A` | `( n addr -- n )` | with the accumulator in and out |
+| `WAIT-BIT` | `( addr mask val -- )` | poll until the masked bits match |
+
+Anything at `$D000-$FFFF` needs `ROMCALL`, because the language card holds
+the dictionary. `$FC58 ROMCALL` clears the text screen.
+
+## Random
+
+| Word | Effect | |
+|---|---|---|
+| `RND` | `( -- u )` | 16-bit xorshift |
+| `RND-SEED!` | `( n -- )` | seeding to zero is refused |
+| `RND-RANGE` | `( lo hi -- n )` | inclusive |
+| `SHUFFLE` | `( addr n w -- )` | Fisher-Yates, w bytes an element |
+
+## Looking at things
+
+| Word | Effect | |
+|---|---|---|
+| `DUMP` | `( addr n -- )` | hex and characters, eight to a line |
+| `SEE` | | decompile the word named next |
+| `>NAME` | `( xt -- addr len )` | which word owns that code field |
+| `.S` | | the stack, without disturbing it |
+| `UNUSED` | `( -- n )` | dictionary bytes left |
+| `MARKER` | | `MARKER NAME` — a word that forgets back to here |
+
+`SEE` walks the whole dictionary to name each cell, so it is slow on a long
+definition. `MARKER` forgets itself along with everything after it.
+
+## Precompiled overlays
+
+A library compiled once, saved, and loaded back at disk speed instead of
+being recompiled a token at a time.
+
+| Word | Effect | |
+|---|---|---|
+| `MARK` | | remember where the dictionary is |
+| `SAVEDICT` | | write everything since `MARK` as a file |
+| `LOADDICT` | `( n -- )` | read one back |
+| `UNMARK` | | throw away everything since `MARK` |
+
+An overlay loads at the address it was saved from, which is why nothing needs
+relocating and why it will refuse to load anywhere else.
 
 ## System variables and internals
 
