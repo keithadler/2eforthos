@@ -89,9 +89,13 @@ local function run(step)
         manager.machine.natkeyboard:post("ABORT\n")
         posting = true
         timer = 5
-    elseif op == "load" then
+    elseif op == "load" or op == "loadwith" then
         -- Look the file up in the parsed catalog rather than hard-coding a
         -- number: adding a file to the disk renumbers everything after it.
+        -- "load NAME" types "<n> LOAD"; "loadwith NAME WORD" types
+        -- "<n> WORD", for the other words that take a catalog number.
+        local want, verb = rest, "LOAD"
+        if op == "loadwith" then want, verb = rest:match("(%S+)%s+(%S+)") end
         local base = varaddr("CATBUF")
         base = base and w(base)
         local n = varaddr("NFILE")
@@ -103,13 +107,13 @@ local function run(step)
                 local c = mem:read_u8(rec + j) & 0x7F
                 name = name .. string.char(c)
             end
-            if name:match("^%s*(.-)%s*$") == rest then found = i end
+            if name:match("^%s*(.-)%s*$") == want then found = i end
         end
         if not found then
-            report(false, "no file called " .. rest)
+            report(false, "no file called " .. tostring(want))
             timer = 2
         else
-            manager.machine.natkeyboard:post(found .. " LOAD\n")
+            manager.machine.natkeyboard:post(found .. " " .. verb .. "\n")
             posting = true
             timer = 5
         end
