@@ -764,6 +764,30 @@ TESTS = {
     stack -1
 """,
 
+# The file count has to be right after a write, not one or four too many.
+# CATLOAD used to ignore the error from DREAD, so a failed read counted the
+# sector before it a second time.
+"catalog-count": """
+    type NFILE @
+    stack 22
+    clear
+    type CATLOAD
+    wait 1800
+    type NFILE @
+    stack 22
+    clear
+    type S" : X 1 ;" SAVE
+    type COUNTED.FTH
+    wait 1800
+    type NFILE @
+    stack 23
+    clear
+    type CATLOAD
+    wait 1800
+    type NFILE @
+    stack 23
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
