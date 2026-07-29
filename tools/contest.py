@@ -1900,6 +1900,57 @@ TESTS = {
     stack 5
 """,
 
+# A line editor, so code can be written on the machine instead of on the
+# host.  Type lines in, list them, edit one, write it out, load it back --
+# which is the whole loop this system did not have.
+"editor": """
+    load EDIT.FTH
+    wait 3000
+    clear
+    type NEW ELINES @
+    stack 0
+    clear
+    type +L
+    type : ETEST 111 ;
+    type : ETEST2 ETEST 2 * ;
+    type .
+    wait 300
+    type ELINES @
+    stack 2
+    clear
+    type 0 ELINE COUNT NIP
+    stack 13
+    clear
+    type 1 SET
+    type : ETEST2 ETEST 3 * ;
+    wait 300
+    type ELINES @
+    stack 2
+    clear
+    type EWRITE
+    wait 300
+    type EDTMP.FTH
+    wait 2400
+    files 1
+    clear
+    loadwith EDTMP.FTH LOAD
+    wait 2400
+    clear
+    type ETEST2
+    stack 333
+    clear
+    type NEW ELINES @
+    stack 0
+    clear
+    loadwith EDTMP.FTH EREAD
+    wait 2400
+    type ELINES @
+    stack 2
+    clear
+    type 0 ELINE COUNT NIP
+    stack 13
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
