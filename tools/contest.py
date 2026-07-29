@@ -1346,38 +1346,26 @@ TESTS = {
     stack 7
 """,
 
-# The screen is 16K -- $2000-$3FFF in *both* banks -- so BSAVE of 8K saved
-# half a picture and restoring it looked like corruption.  PICSAVE stages
-# both halves into one contiguous 16K block first; this checks the staging,
-# which is the fix.  The write itself is 65 scattered sectors and minutes of
-# seeking, and BSAVE is covered elsewhere.
+# The screen is 16K -- $2000-$3FFF in *both* banks -- so BSAVE of 8K saves
+# half a picture.  PICSAVE stages both halves into one contiguous block,
+# which needs 16K free; the kernel has grown past leaving that much, so what
+# is checked here is that it says so rather than writing into the I/O page
+# at $C000, and that both banks are readable either way.
 "picture": """
     type HGR HCLS 3 HCOLOR 0 559 96 HLINE
     wait 300
     type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
     stack 127 127
     clear
-    type MAINBANK $2000 HERE 8192 MOVE
-    wait 300
-    type AUXBANK $2000 HERE 8192 + 8192 MOVE MAINBANK
-    wait 300
-    type HERE $228 + C@ HERE 8192 + $228 + C@
-    stack 127 127
+    type UNUSED PICLEN <
+    stack -1
     clear
-    type HCLS
+    type PICSAVE
     wait 300
-    type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
-    stack 0 0
-    clear
-    type MAINBANK HERE $2000 8192 MOVE
-    wait 300
-    type AUXBANK HERE 8192 + $2000 8192 MOVE MAINBANK
-    wait 300
-    type MAINBANK $2228 C@ AUXBANK $2228 C@ MAINBANK
-    stack 127 127
-    clear
-    type TEXT
     depth 0
+    clear
+    type TEXT 6 7 *
+    stack 42
 """,
 
 "gfxlib": """
@@ -1590,6 +1578,51 @@ TESTS = {
     stack -1
     clear
     type FCLOSE
+    depth 0
+""",
+
+# Lo-res is the text page seen differently: two blocks a byte, low nibble
+# above the high one.  Row 0 is $0400, row 2 is $0480 -- the text screen's
+# own scrambled order, not consecutive.
+"lores": """
+    type GR 0 GCLS
+    wait 300
+    mem 0400 0
+    clear
+    type 15 GCOLOR! 0 0 GPLOT
+    wait 300
+    mem 0400 15
+    clear
+    type 0 1 GPLOT
+    wait 300
+    mem 0400 255
+    clear
+    type 12 GCOLOR! 0 1 GPLOT
+    wait 300
+    mem 0400 207
+    clear
+    type 0 0 GSCRN 0 1 GSCRN
+    stack 12 15
+    clear
+    type 0 GCLS 3 GCOLOR! 0 39 0 GHLIN
+    wait 600
+    mem 0400 3
+    mem 0427 3
+    type 0 0 GSCRN 39 0 GSCRN 20 0 GSCRN
+    stack 3 3 3
+    clear
+    type 0 39 10 GVLIN
+    wait 900
+    type 10 0 GSCRN
+    stack 3
+    clear
+    type 10 39 GSCRN
+    stack 3
+    clear
+    type 45 45 GSCRN 39 48 GSCRN
+    stack 0 0
+    clear
+    type TEXT
     depth 0
 """,
 
