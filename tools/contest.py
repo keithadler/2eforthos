@@ -34,7 +34,7 @@ ROW96 = 0x2228
 TESTS = {
 
 "boot": """
-    check NFILE 12
+    check NFILE 22
     depth 0
 """,
 
@@ -115,9 +115,9 @@ TESTS = {
 
 # The catalog is read from the disk at boot, not compiled in.
 "catalog": """
-    check NFILE 12
+    check NFILE 22
     type NFILE @
-    stack 12
+    stack 22
     clear
     type FREE
     wait 240
@@ -174,12 +174,15 @@ TESTS = {
 # The console commands have to leave nothing on the stack behind them.
 "commands": """
     type CAT
+    wait 600
     depth 0
     shot
     type HELP
+    wait 600
     depth 0
     shot
     type 99 LOCK
+    wait 240
     depth 0
 """,
 
@@ -400,11 +403,11 @@ TESTS = {
 
 # SYSTEM.FTH is on the disk as text; loading it recompiles the whole system
 # over itself, which is the strongest test of LOAD there is.
-# TEST.FTH is entry 11 in the catalog: definitions, a variable, and a
+# TEST.FTH is on the disk as text: definitions, a variable, and a
 # CREATE ... DOES> array, all of which have to survive being read off a
 # floppy a sector at a time.
 "load": """
-    type 11 LOAD
+    load TEST.FTH
     wait 600
     clear
     check LOADED -1
@@ -517,9 +520,9 @@ TESTS = {
     type S" : NEWWORD 4242 ;" SAVE
     type SAVED.FTH
     wait 900
-    check NFILE 13
+    check NFILE 23
     clear
-    type 12 LOAD
+    load SAVED.FTH
     wait 900
     clear
     type NEWWORD
@@ -534,11 +537,11 @@ TESTS = {
     type $0D00 16 BSAVE
     type BLOB
     wait 900
-    check NFILE 13
+    check NFILE 23
     clear
     type $0E00 16 0 FILL
     clear
-    type 12 $0E00 BLOAD
+    type NFILE @ 1- $0E00 BLOAD
     wait 600
     stack 16
     mem 0E00 90
@@ -603,7 +606,7 @@ TESTS = {
 # Each demo has to load inside the dictionary that is left and run without
 # leaving anything on the stack.  They are listed here in catalog order.
 "demo-gfx": """
-    type 3 LOAD
+    load GFX.FTH
     wait 1200
     clear
     type GFX
@@ -614,7 +617,7 @@ TESTS = {
 """,
 
 "demo-moire": """
-    type 7 LOAD
+    load MOIRE.FTH
     wait 1200
     clear
     type BANDS
@@ -628,7 +631,7 @@ TESTS = {
 """,
 
 "demo-bounce": """
-    type 1 LOAD
+    load BOUNCE.FTH
     wait 1200
     clear
     type 0 BX ! 0 BY ! 7 DX ! 3 DY ! STEP
@@ -641,7 +644,7 @@ TESTS = {
 """,
 
 "demo-primes": """
-    type 8 LOAD
+    load PRIMES.FTH
     wait 1200
     clear
     type 97 PRIME?
@@ -659,7 +662,7 @@ TESTS = {
 """,
 
 "demo-lang": """
-    type 5 LOAD
+    load LANG.FTH
     wait 1200
     clear
     type FILLSQ 7 SQUARES @
@@ -671,7 +674,7 @@ TESTS = {
 """,
 
 "demo-sound": """
-    type 10 LOAD
+    load SOUND.FTH
     wait 1200
     clear
     type 120 NOTE
@@ -679,6 +682,22 @@ TESTS = {
     type CHIRP
     wait 900
     depth 0
+""",
+
+# Both comment forms have to survive being read off the disk, including one
+# that runs to the end of a line of code.
+"comments": """
+    load COMMENTS.FTH
+    wait 1200
+    clear
+    type 7 SIXFOLD
+    stack 42
+    clear
+    type 1 2 ( a bracket comment ) 3
+    stack 3 2 1
+    clear
+    type 4 DOUBLE 4 TREBLE
+    stack 12 8
 """,
 
 "raw-sectors": """

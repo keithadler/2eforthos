@@ -86,6 +86,30 @@ local function run(step)
         manager.machine.natkeyboard:post("ABORT\n")
         posting = true
         timer = 5
+    elseif op == "load" then
+        -- Look the file up in the parsed catalog rather than hard-coding a
+        -- number: adding a file to the disk renumbers everything after it.
+        local base = varaddr("CATBUF")
+        base = base and w(base)
+        local n = varaddr("NFILE")
+        n = n and w(n) or 0
+        local found = nil
+        for i = 0, n - 1 do
+            local rec, name = base + i * 36 + 6, ""
+            for j = 0, 29 do
+                local c = mem:read_u8(rec + j) & 0x7F
+                name = name .. string.char(c)
+            end
+            if name:match("^%s*(.-)%s*$") == rest then found = i end
+        end
+        if not found then
+            report(false, "no file called " .. rest)
+            timer = 2
+        else
+            manager.machine.natkeyboard:post(found .. " LOAD\n")
+            posting = true
+            timer = 5
+        end
     elseif op == "wait" then
         timer = tonumber(rest)
     elseif op == "shot" then

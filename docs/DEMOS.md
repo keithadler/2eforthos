@@ -9,11 +9,15 @@ wants:
 Load one, run it, and give the space back before loading the next:
 
 ```
-3 LOAD          the number CAT printed
+CAT             find the number
+10 LOAD         load it
 GFX             what the demo said to type
 TEXT            back to the console, for the graphics ones
 FORGET GFX--    reclaim the dictionary
 ```
+
+The numbers move as files are added to the disk, so `CAT` first rather than
+trusting one written down here.
 
 Each demo defines a marker as its first word for exactly that. There is only
 about 1.1K of dictionary free on a fresh boot, so one demo at a time.
@@ -27,7 +31,7 @@ overwrite what was left of it.
 
 ## GFX
 
-`GFX.FTH`, entry 3 — `3 LOAD` then `GFX`.
+`examples/GFX.FTH` — `CAT` for its number, then `n LOAD`, then `GFX`.
 
 Everything the drawing words do, on one screen: an outlined box flooded
 from a point inside it, four concentric circles, eight filled bars, a
@@ -65,7 +69,7 @@ CREATE STAR $18 C, $3C C, $7E C, $FF C, $7E C, $3C C, $18 C,
 
 ## MOIRE
 
-`MOIRE.FTH`, entry 7 — `7 LOAD` then `MOIRE`.
+`examples/MOIRE.FTH` — `CAT` for its number, then `n LOAD`, then `MOIRE`.
 
 Two fans of lines drawn in XOR mode. Where a line from one centre crosses
 a line from the other the two cancel, so what is left is the pattern the
@@ -103,7 +107,7 @@ crossings make rather than the lines themselves. This is the sort of thing
 
 ## BANDS
 
-`MOIRE.FTH`, entry 7 — `7 LOAD` then `BANDS`.
+`examples/MOIRE.FTH` — `CAT` for its number, then `n LOAD`, then `BANDS`.
 
 The same file's other word: the eight values `HCOLOR` takes, side by side.
 0 is black and 3 is white; the six between them are dither patterns, and
@@ -116,7 +120,7 @@ as vertical stripes instead of grey.
 
 ## BOUNCE
 
-`BOUNCE.FTH`, entry 1 — `1 LOAD` then `BOUNCE`.
+`examples/BOUNCE.FTH` — `CAT` for its number, then `n LOAD`, then `BOUNCE`.
 
 A sprite bouncing around the screen, caught mid-flight. In XOR mode a
 shape drawn twice in the same place leaves the screen as it was found, so
@@ -162,7 +166,7 @@ VARIABLE BX VARIABLE BY VARIABLE DX VARIABLE DY
 
 ## PRIMES
 
-`PRIMES.FTH`, entry 8 — `8 LOAD` then `PRIMES`.
+`examples/PRIMES.FTH` — `CAT` for its number, then `n LOAD`, then `PRIMES`.
 
 Trial division by odd numbers only, stopping once the divisor squared
 passes the candidate, printed in columns with `.R`. Loops, early `EXIT`
@@ -201,7 +205,7 @@ from inside a `BEGIN`, and right-justified output.
 
 ## DEMO
 
-`LANG.FTH`, entry 5 — `5 LOAD` then `DEMO`.
+`examples/LANG.FTH` — `CAT` for its number, then `n LOAD`, then `DEMO`.
 
 `ARRAY` is a word that makes words — `CREATE` lays down the space and
 `DOES>` says what the words it made should do when they run. Then `CASE`,
@@ -238,6 +242,26 @@ compiler already had.
 </details>
 
 ---
+
+## The rest of the examples
+
+`examples/` also holds a tutorial set, walked through in
+[TUTORIAL.md](TUTORIAL.md), each heavily commented:
+
+| file | |
+|---|---|
+| `HELLO.FTH` | printing, a first definition, both comment forms |
+| `STACK.FTH` | the stack words, each shown with `.S` |
+| `MATH.FTH` | floored division, and why `*/` exists |
+| `LOOPS.FTH` | `DO` `?DO` `+LOOP` `LEAVE` `J`, and the loop that always runs once |
+| `CONDS.FTH` | `IF`/`ELSE`/`THEN`, and `CASE` as library code |
+| `DEFINING.FTH` | `CREATE ... DOES>` — words that make words |
+| `STRINGS.FTH` | `S"` `COUNT` `TYPE`, and pictured numeric output |
+| `COMMENTS.FTH` | what the two comment forms will and will not swallow |
+| `PADDLE.FTH` | the game port, and plotting what it says |
+| `DISKIO.FTH` | raw sectors, and writing a file |
+
+![floored division](images/ex-math.png)
 
 ## Writing your own
 

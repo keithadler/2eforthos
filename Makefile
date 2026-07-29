@@ -28,7 +28,7 @@ SHOTS   := $(CURDIR)/shots
 SRCS    := $(wildcard $(SRCDIR)/*.s)
 # forth.s pulls the system in with .include, so every .inc is a dependency
 INCS    := $(wildcard src/*.inc)
-DISKFILES := $(wildcard disk/*)
+DISKFILES := $(wildcard disk/*) $(wildcard examples/*.FTH)
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/bootsrc.inc
