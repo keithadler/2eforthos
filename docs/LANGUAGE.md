@@ -473,6 +473,13 @@ accurate as the 1.023 MHz it assumes.
 
 ## The disk
 
+Every read and write is retried four times before it is called a failure. A
+read straight after a write fails often enough to matter — the head has just
+been somewhere else and the sector comes round when it comes round — which is
+why DOS retried too. `DERR` holds the last error code.
+
+
+
 | Word | Effect | |
 |---|---|---|
 | `DREAD` | `( t s addr -- err )` | read one sector |

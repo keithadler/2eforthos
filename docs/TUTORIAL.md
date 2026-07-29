@@ -314,6 +314,46 @@ defined *after* it. `.S` finds the first. The second announces itself with a
   about how to factor a program into words, and is the better book
 
 
+## Writing it on the machine instead
+
+Everything above put source on the host and rebuilt the disk. There is an
+editor on the floppy, and with it the loop never leaves the //e.
+
+```
+CAT              find EDIT.FTH's number
+28 LOAD          load it
+EHELP            the commands
+```
+
+| | |
+|---|---|
+| `NEW` | empty the buffer |
+| `+L` | type lines; a lone `.` on its own ends |
+| `LIST` | show the buffer with line numbers |
+| `n INS` | type a line in before line *n* |
+| `n SET` | retype line *n* |
+| `n DEL-L` | delete line *n* |
+| `EWRITE` | write it out — it asks for a name |
+| `n EREAD` | read a file back into the buffer |
+
+So the whole cycle is:
+
+```
+NEW  +L
+: DOUBLE 2 * ;
+: QUAD DOUBLE DOUBLE ;
+.
+EWRITE
+MINE.FTH
+CAT              MINE.FTH has a number now
+29 LOAD
+5 QUAD .         20
+```
+
+Sixty lines of sixty-three characters, which is about as much source as fits
+alongside what it compiles to. `FORGET ED--` gives the editor back when you
+are done with it.
+
 ## What else is on the machine
 
 This walked from the prompt to a program on the floppy. The rest is in

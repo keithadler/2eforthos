@@ -265,6 +265,29 @@ compiler already had.
 | `FINANCE.FTH` | compound interest and loan payments on the ROM's floats |
 | `GFXLIB.FTH` | polygons, ellipses, arcs, and saving what is under a sprite |
 
+**Writing code on the machine.** `EDIT.FTH` is a line editor, and it closes
+the loop this system did not have: until it, source lived on the host and
+every change meant rebuilding the disk and rebooting.
+
+```
+28 LOAD          load the editor
+EHELP            what it does
+NEW  +L          empty the buffer, then type lines
+: SQUARE DUP * ;
+.                a lone full stop ends the typing
+LIST             show it with numbers
+1 SET            retype line 1
+EWRITE           write it out, asking for a name
+```
+
+Then `CAT` for its number and `n LOAD` compiles it, exactly like any other
+file. `n EREAD` reads one back into the buffer to change it again.
+
+A line editor rather than a screen one, deliberately: a screen editor wants
+the cursor moved about, the display redrawn under it and the 80-column
+firmware fought with. This wants `ASKLN` and a buffer, which is the shape
+`ed` had.
+
 **Charts on the lo-res screen.** `CHART.FTH` — `BARS` and `STACKED`, built
 on `GBAR` and the `DATA`/`READ` table. Lo-res is the text page seen
 differently, two blocks to a byte, which is why a chart belongs here rather
