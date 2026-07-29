@@ -777,6 +777,16 @@ STKSTR: .byte   " STACK?", $0D, $00
         sta     1,x
         NEXT
 
+; Rebuild the hash buckets from the definition chain.  Anything that moves
+; LATEST wholesale -- FORGET, or loading a precompiled overlay -- has to
+; follow it with this, because the buckets are a second set of links that
+; nothing else maintains.
+        prim    "REINDEX", W_REINDEX, 0
+        stx     XSAV
+        jsr     BuildIndex
+        ldx     XSAV
+        NEXT
+
         prim    "IMMEDIATE", W_IMMEDIATE, 0
         lda     LATESTV
         sta     UTMP

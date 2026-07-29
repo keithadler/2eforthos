@@ -384,6 +384,10 @@ VARIABLE CATE VARIABLE FT2 VARIABLE FS2
 \ first one.
 $CE CONSTANT 'SRC  $2000 CONSTANT LDBUF  $4000 CONSTANT LDTOP
 VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
+\ Where the sector walk must stop.  Source goes on hi-res page 1 and must
+\ not run past it; a binary goes wherever it was asked for, and is only
+\ stopped by the top of memory.  One walk, two ceilings.
+VARIABLE LTOP
 : LSECS ( t s -- ) LS ! LT !
   MAINBANK              \ the buffer is on hi-res page 1, which follows PAGE2
                         \ while 80STORE is set -- and the console's firmware
@@ -392,7 +396,7 @@ VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
     LT @ LS @ TSBUF DREAD DROP
     122 0 DO TSBUF 12 + I 2* +
       DUP C@ 0= IF DROP ELSE
-        LP @ LDTOP U< IF        \ unsigned: these are addresses, not numbers
+        LP @ LTOP @ U< IF       \ unsigned: these are addresses, not numbers
           DUP C@ SWAP 1+ C@ LP @ DREAD DROP  256 LP +!
         ELSE DROP THEN
       THEN LOOP
@@ -404,6 +408,7 @@ VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
 
 : LOAD ( n -- ) FPICK 0= IF EXIT THEN
   FSEC SECBUF DREAD DROP
+  LDTOP LTOP !
   LDBUF DUP LBUF ! LP !
   FENTRY DUP C@ SWAP 1+ C@ LSECS
   LNORM
@@ -414,10 +419,48 @@ VARIABLE LT VARIABLE LS VARIABLE LP VARIABLE LBUF
 VARIABLE BLA
 : BLOAD ( n addr -- len ) BLA ! FPICK 0= IF 0 EXIT THEN
   FSEC SECBUF DREAD DROP
+  $BF00 LTOP !
   BLA @ LP !
   FENTRY DUP C@ SWAP 1+ C@ LSECS
   BLA @ 2 + @
   BLA @ 4 + BLA @ ROT DUP >R MOVE R> ;
+
+\ --- precompiled overlays --------------------------------------------------
+\ Compiling a library from source costs a token lookup per word; the same
+\ library saved as an image of the dictionary it produced loads at disk
+\ speed.  Nothing has to be relocated because it goes back at the address it
+\ came from, which is the whole trick -- a thread cell is an absolute
+\ address, and moving one word would mean patching every thread that names
+\ it.
+\
+\   MARK          before defining anything
+\   ... : FOO ... ;  ...
+\   SAVEDICT      writes a binary file, asking for the name
+\
+\ and in a later session, before defining anything else:
+\
+\   n LOADDICT    reads it back and the words are simply there
+\
+\ The two cells MARK lays down hold LATEST and the base address, so LOADDICT
+\ can put the dictionary chain back and refuse the load if it would land
+\ somewhere else.
+VARIABLE MKBASE VARIABLE MKLATEST
+: MARK HERE MKBASE ! LATEST @ MKLATEST ! 0 , 0 , ;
+: UNMARK MKBASE @ 0= IF EXIT THEN
+  MKBASE @ DP ! MKLATEST @ LATEST ! REINDEX ;
+: SAVEDICT
+  MKBASE @ 0= IF ." NO MARK" CR EXIT THEN  \ 0<, not 0=, would call every
+                                            \ address above $7FFF no mark
+  LATEST @ MKBASE @ !
+  MKBASE @ MKBASE @ 2 + !
+  MKBASE @ HERE OVER - BSAVE ;
+: LOADDICT ( n -- )
+  HERE DUP >R BLOAD
+  R@ 2 + @ R@ = 0= IF
+    R> 2DROP ." OVERLAY WANTS A DIFFERENT ADDRESS" CR EXIT THEN
+  R@ + DP !
+  R> @ LATEST !
+  REINDEX ;
 
 \ --- the greeting ----------------------------------------------------------
 : HELP
@@ -425,6 +468,8 @@ VARIABLE BLA
   ." n LOCK           LOCK OR UNLOCK A FILE" CR
   ." n DEL   n REN    DELETE OR RENAME ONE" CR
   ." n LOAD           INTERPRET A TEXT FILE AS FORTH" CR
+  ." MARK  UNMARK     BRACKET WORK YOU MEAN TO THROW AWAY" CR
+  ." SAVEDICT         WRITE IT AS AN OVERLAY, n LOADDICT READS IT BACK" CR
   ." addr len SAVE    WRITE A TEXT FILE, ASKING FOR THE NAME" CR
   ." addr len BSAVE   THE SAME AS A BINARY FILE" CR
   ." n addr BLOAD     READ ONE BACK, RETURNING ITS LENGTH" CR

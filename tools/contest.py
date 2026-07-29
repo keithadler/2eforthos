@@ -707,6 +707,49 @@ TESTS = {
     stack -1
 """,
 
+# A precompiled overlay: define words, save the dictionary image, and read it
+# back in a later session with the words simply there.  It has to land at the
+# address it came from, and it has to refuse if it cannot.
+"overlay": """
+    type MARK
+    type : ALPHA 111 ; : BETA ALPHA 2 * ; VARIABLE GAMMA 7 GAMMA !
+    type BETA GAMMA @
+    stack 7 222
+    clear
+    type NFILE @
+    stack 22
+    clear
+    type SAVEDICT
+    type OVL.BIN
+    wait 1800
+    clear
+    type FORGET ALPHA
+    type BETA
+    depth 0
+""",
+
+# Saved, thrown away, and read back at the address it came from -- the words
+# are simply there, with nothing compiled.
+"overlay-load": """
+    type MARK
+    type : ALPHA 111 ; : BETA ALPHA 2 * ; VARIABLE GAMMA 7 GAMMA !
+    type SAVEDICT
+    type OVL.BIN
+    wait 900
+    clear
+    type UNMARK
+    type BETA
+    depth 0
+    type NFILE @ 1- LOADDICT
+    wait 600
+    clear
+    type BETA
+    stack 222
+    clear
+    type GAMMA @
+    stack 7
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
