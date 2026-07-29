@@ -720,7 +720,7 @@ VARIABLE WBA VARIABLE WBM VARIABLE WBV
 VARIABLE GLA VARIABLE GLB
 : GHLIN ( x1 x2 y -- ) GLA ! GLB ! GLB @ 1+ SWAP ?DO I GLA @ GPLOT LOOP ;
 : GVLIN ( y1 y2 x -- ) GLA ! GLB ! GLB @ 1+ SWAP ?DO GLA @ I GPLOT LOOP ;
-: GBAR ( x y n -- ) OVER + 1- SWAP ROT SWAP SWAP GVLIN ;
+: GBAR ( x y n -- ) OVER + 1- ROT GVLIN ;
 
 \ --- saving a picture ------------------------------------------------------
 \ The screen is sixteen kilobytes, not eight: the same addresses $2000-$3FFF

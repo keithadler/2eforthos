@@ -1645,6 +1645,17 @@ TESTS = {
     type 10 39 GSCRN
     stack 3
     clear
+    type 5 GCOLOR! 20 10 8 GBAR
+    wait 600
+    type 20 10 GSCRN 20 17 GSCRN 20 18 GSCRN
+    stack 0 5 5
+    clear
+    type DATA: 11 +VAL 22 +VAL 33 +VAL ;DATA DATA#
+    stack 3
+    clear
+    type READ-VAL READ-VAL RESTORE-DATA READ-VAL
+    stack 11 22 11
+    clear
     type 45 45 GSCRN 39 48 GSCRN
     stack 0 0
     clear
