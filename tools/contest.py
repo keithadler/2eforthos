@@ -1477,6 +1477,44 @@ TESTS = {
     stack -4 2
 """,
 
+# The file commands read a sector, change a few bytes and write it back.  A
+# read whose error is ignored writes the *previous* sector's contents back
+# in its place.  These check the whole round trip survives, and that RD and
+# WR report rather than corrupt.
+"file-roundtrip": """
+    type S" : RT 1 ;" SAVE
+    type RTRIP.FTH
+    wait 900
+    files 1
+    clear
+    loadwith RTRIP.FTH LOCK
+    wait 900
+    clear
+    loadwith RTRIP.FTH CATENT
+    type C@
+    stack 128
+    clear
+    loadwith RTRIP.FTH REN
+    type RTRIP2.FTH
+    wait 900
+    files 1
+    clear
+    loadwith RTRIP2.FTH CATENT
+    type C@
+    stack 128
+    clear
+    loadwith RTRIP2.FTH DEL
+    wait 900
+    files 1
+    clear
+    loadwith RTRIP2.FTH LOCK
+    wait 900
+    clear
+    loadwith RTRIP2.FTH DEL
+    wait 900
+    files 0
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
