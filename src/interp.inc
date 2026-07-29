@@ -178,7 +178,18 @@ NextSrcSector:
         rts
 @none:  lda     #0
         sta     SRC+1
-        sec
+        ; The system's source has run out, so the dictionary comes back to
+        ; main memory -- once.  A file loaded later runs out through here
+        ; too, and must not move it a second time.
+        lda     DPSWTCH
+        bne     :+
+        lda     #$FF
+        sta     DPSWTCH
+        lda     #<KERNEL_END
+        sta     DPV
+        lda     #>KERNEL_END
+        sta     DPV+1
+:       sec
         rts
 
 ; Advance the bootstrap source pointer.
@@ -228,10 +239,8 @@ Refill:
 
 @kbd:   lda     #$BE                    ; '>' prompt, high bit set for COUT
         sta     PROMPT
-        stx     XSAV
-        jsr     GETLN                   ; returns the length in X
-        stx     TIBLEN
-        ldx     XSAV
+        jsr     ReadLine
+        sta     TIBLEN
         lda     #0
         sta     TOIN
         ; Strip the high bit, and fold to upper case: a //e keyboard sends
@@ -613,7 +622,9 @@ Error:
         lda     #'?'
         jsr     PutChar
         stx     XSAV
+        ROMIN
         jsr     CROUT
+        ROMOUT
         ldx     XSAV
         ldx     #DSTACK_TOP             ; clear the data stack
         rts
@@ -706,10 +717,8 @@ STKSTR: .byte   " STACK?", $0D, $00
 ; the text is copied straight out to INBUF and TIBLEN/TOIN are left alone.
 ; Whatever line invoked this word is still consumed, but nothing aliases.
         prim    "ASKLN", W_ASKLN, 0     ; -- addr len
-        stx     XSAV
-        jsr     GETLN                   ; length comes back in X
-        stx     TMP1
-        ldx     XSAV
+        jsr     ReadLine
+        sta     TMP1
         lda     TMP1
         cmp     #INBUFSZ
         bcc     :+

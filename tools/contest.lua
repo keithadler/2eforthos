@@ -48,7 +48,10 @@ local function varaddr(name)
     local guard = 0
     while p ~= 0 do
         guard = guard + 1
-        if guard > 4000 or p < 0x4000 or p > 0xBEFF then return nil end
+        -- The system's own words are compiled into the language card, so a
+        -- header is either in main above the kernel or in the card.
+        if guard > 4000 or p < 0x4000 or (p > 0xBFFF and p < 0xD000)
+           or p > 0xFFF9 then return nil end
         local len = mem:read_u8(p + 4) & 0x3F
         local s = ""
         for i = 0, len - 1 do s = s .. string.char(mem:read_u8(p + 5 + i)) end

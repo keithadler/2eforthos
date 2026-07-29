@@ -779,7 +779,9 @@ W_PABORTQ:
         jsr     PutChar
         jmp     @l
 @stop:  stx     XSAV
+        ROMIN
         jsr     CROUT
+        ROMOUT
         ldx     #DSTACK_TOP
         jmp     Quit
 

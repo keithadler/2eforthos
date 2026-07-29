@@ -21,6 +21,7 @@
 ; the inner interpreter ends in JMP (W).  See dict.inc for the layout.
 ; ---------------------------------------------------------------------------
 
+.include "lc.inc"
 .include "zp.inc"
 .include "srcsecs.inc"       ; SRCSECS, SRCTRACK -- where the source lives
 .include "dict.inc"
@@ -30,6 +31,19 @@ ColdStart:
         cld
         ldx     #$FF                    ; return stack
         txs
+        ; Bring the language card in.  The CPU takes its reset and interrupt
+        ; vectors from $FFFA-$FFFF whatever is banked there, so those six
+        ; bytes are copied out of the ROM first -- reading ROM and writing
+        ; the card at the same time, which is exactly what $C089 is for.
+        bit     LCWRITE
+        bit     LCWRITE
+        ldy     #5
+@vec:   lda     $FFFA,y
+        sta     $FFFA,y
+        dey
+        bpl     @vec
+        bit     LCRAM
+        bit     LCRAM
         ldx     #DSTACK_TOP             ; data stack
         stx     XSAV
         jsr     HgrText
@@ -38,9 +52,11 @@ ColdStart:
         ; costs two calls and nothing in the image.  It takes over CSW and KSW,
         ; so nothing here may set those afterwards -- COUT and GETLN reach it
         ; through them.
+        ROMIN
         jsr     SETTXT
         jsr     C3INIT
         jsr     HOME
+        ROMOUT
         ldx     XSAV
         lda     #<BANNER
         sta     TMP2
@@ -49,10 +65,21 @@ ColdStart:
         jsr     PutStr
         jsr     BuildIndex              ; hash the built-in dictionary
         jsr     D2BuildTable            ; invert the 6-and-2 nibble table
+        ; The system compiles itself into the language card, and the
+        ; dictionary pointer comes back to main memory when it has finished.
+        ; Nothing of the system is in the user's way afterwards: they get the
+        ; whole of KERNEL_END to $BFFF, contiguous, instead of what was left
+        ; over.  Doing it this way rather than letting the dictionary run
+        ; across the $C000 hole means no definition can ever straddle it.
+        lda     #<LCDICT
+        sta     DPV
+        lda     #>LCDICT
+        sta     DPV+1
         lda     #0                      ; the system's own source is on the
         sta     SRCIDX                  ; disk; read the first sector of it
-        stx     XSAV                    ; and let the interpreter compile
-        jsr     NextSrcSector           ; itself before the keyboard is read
+        sta     DPSWTCH                 ; and let the interpreter compile
+        stx     XSAV                    ; itself before the keyboard is read
+        jsr     NextSrcSector
         ldx     XSAV
         jmp     Quit
 
@@ -82,6 +109,9 @@ BANNER: .byte   "INITIALIZING...", $0D, $00
         .segment "DATA"
 
 SRCIDX:  .byte  0                       ; which source sector comes next
+DPSWTCH: .byte  0                       ; has the dictionary come back to main?
+LNX:     .byte  0                       ; ReadLine's parked stack pointer
+LNLEN:   .byte  0
 
 TIBLEN:  .byte  0                       ; characters in the terminal buffer
 TOIN:    .byte  0                       ; parse offset into it
