@@ -27,6 +27,32 @@ for pair in (os.getenv("SYMS") or ""):gmatch("[^,]+") do
     if n then SYMS[n] = tonumber(a) end
 end
 
+-- The game port, for anything that reads a pointer.  A value written to an
+-- ioport field does not necessarily stay written, so the wanted state is
+-- held here and reapplied every frame.
+local fx, fy, btn
+local wantx, wanty, wantbtn = 128, 128, 0
+
+local function analog(which)
+    for tag, port in pairs(manager.machine.ioport.ports) do
+        if tag:find("joystick_1_" .. which) then
+            for _, f in pairs(port.fields) do
+                if f.is_analog then return f end
+            end
+        end
+    end
+end
+
+local function button()
+    for tag, port in pairs(manager.machine.ioport.ports) do
+        if tag:find("joystick_buttons") then
+            for name, f in pairs(port.fields) do
+                if name == "P1 Button 1" then return f end
+            end
+        end
+    end
+end
+
 local mem, frames, phase = nil, 0, "wait"
 local steps, at, timer = {}, 1, 0
 local posting = false                   -- a line is still being typed in
@@ -117,6 +143,17 @@ local function run(step)
             posting = true
             timer = 5
         end
+    elseif op == "point" then
+        -- PADDLE reads 0..255 and the screen is 560 by 192, so x is 17/8 of
+        -- the reading and y is 3/4: this is those relations inverted.
+        local x, y = rest:match("(%-?%d+)%s+(%-?%d+)")
+        wantx = math.floor(tonumber(x) * 8 / 17)
+        wanty = math.floor(tonumber(y) * 4 / 3)
+        timer = 150
+    elseif op == "press" then
+        wantbtn = 1; timer = 30
+    elseif op == "release" then
+        wantbtn = 0; timer = 30
     elseif op == "wait" then
         timer = tonumber(rest)
     elseif op == "shot" then
@@ -188,11 +225,15 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
             manager.machine:exit()
             return
         end
+        fx, fy, btn = analog("x"), analog("y"), button()
         print(string.format("     console up at frame %d", frames))
         phase, timer = "run", 60
         return
     end
     if phase ~= "run" then return end
+    if fx then fx:set_value(wantx) end
+    if fy then fy:set_value(wanty) end
+    if btn then btn:set_value(wantbtn) end
     if timer > 0 then timer = timer - 1 return end
     if posting then
         if manager.machine.natkeyboard.is_posting then return end
