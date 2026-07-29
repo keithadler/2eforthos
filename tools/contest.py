@@ -1515,6 +1515,29 @@ TESTS = {
     files 0
 """,
 
+# Reading a file a byte at a time, without swallowing it whole.  TEST.FTH
+# starts with a backslash comment, stored high-bit set the way DOS does.
+"file-read": """
+    loadwith TEST.FTH FOPEN
+    wait 1200
+    stack -1
+    clear
+    type FGETC
+    stack 220
+    clear
+    type FGETC FGETC
+    stack 212 160
+    clear
+    type PAD 16 FREAD
+    stack 16
+    clear
+    type PAD C@ PAD 1+ C@
+    stack 211 197
+    clear
+    type FCLOSE FGETC
+    stack -1
+""",
+
 "raw-sectors": """
     type 17 0 2048 DREAD
     stack 0
