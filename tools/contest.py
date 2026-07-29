@@ -740,7 +740,7 @@ TESTS = {
     type UNMARK
     type BETA
     depth 0
-    type NFILE @ 1- LOADDICT
+    loadwith OVL.BIN LOADDICT
     wait 600
     clear
     type BETA
