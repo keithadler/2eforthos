@@ -102,7 +102,8 @@ NEWHDR:  .word  0                       ; header being built
 STRLEN:  .word  0                       ; count byte of a compiling string
 CFLO:    .byte  0
 CFHI:    .byte  0
-NUMBUF:  .res   8                       ; digits, emitted in reverse
+NUMBUF:  .res   20                      ; digits, emitted in reverse.  A
+                                        ; cell in base 2 is sixteen of them
 
 ; $80 makes the drawing words XOR what they draw instead of replacing it, so
 ; the same call both draws and erases: drawing a shape twice leaves the screen

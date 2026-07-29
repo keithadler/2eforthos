@@ -165,16 +165,30 @@ PushInbuf:
 ; ---------------------------------------------------------------------------
 ; State and comments
 ; ---------------------------------------------------------------------------
+; A bracket comment runs to the closing bracket however many lines that
+; takes: refilling from here consumes the rest of the comment and leaves the
+; interpreter to carry on with whatever follows it on the last line.  A file
+; that ends inside one stops when the source does, and at the keyboard it
+; simply asks for another line.
         prim    "(", W_PAREN, F_IMMED
-        ldy     TOIN
+@scan:  ldy     TOIN
 @l:     cpy     TIBLEN
-        bcs     @done
+        bcs     @more
         lda     TIB,y
         iny
         cmp     #')'
         bne     @l
-@done:  sty     TOIN
+        sty     TOIN
         NEXT
+@more:  sty     TOIN
+        lda     SRC+1                   ; reading a file that has run out?
+        beq     @kbd
+        jsr     Refill
+        lda     SRC+1
+        bne     @scan
+        NEXT                            ; the file ended inside the comment
+@kbd:   jsr     Refill
+        jmp     @scan
 
         prim    "[", W_LBRACK, F_IMMED
         lda     #0

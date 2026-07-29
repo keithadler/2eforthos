@@ -52,9 +52,11 @@ Forth source (see *Boot cost* below).
 
 | | |
 |---|---|
-| [docs/LANGUAGE.md](docs/LANGUAGE.md) | the whole word set, 310 of them, with stack effects |
-| [docs/DEMOS.md](docs/DEMOS.md) | the six programs on the disk, with screenshots and source |
-| this file | how it is built and why it works the way it does |
+| [docs/FORTH.md](docs/FORTH.md) | what Forth is, where it came from, and which kind this is |
+| [docs/TUTORIAL.md](docs/TUTORIAL.md) | from the prompt to a program saved on the floppy |
+| [docs/LANGUAGE.md](docs/LANGUAGE.md) | every word, with stack effects |
+| [docs/DEMOS.md](docs/DEMOS.md) | the programs on the disk, with screenshots and source |
+| this file | how the machine underneath works |
 
 ## Layout
 
@@ -76,9 +78,9 @@ Forth source (see *Boot cost* below).
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `disk/*.FTH` | the demos, put on the floppy by `make disk` |
-| `docs/LANGUAGE.md` | every word, with stack effects |
-| `docs/DEMOS.md` | the demo gallery |
+| `examples/*.FTH` | seventeen Forth programs, all put on the floppy by `make disk` |
+| `disk/*` | the plain text files that also go on it |
+| `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
 | `examples/hello.s` | the original 31-byte hello world, from before any of this |
 | `tools/contest.py` | the console test suite — types Forth, checks machine state |
@@ -375,7 +377,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `disk/*.FTH` | six Forth programs on the floppy, below. |
+| `examples/*.FTH` | seventeen Forth programs on the floppy — six graphical demos and a commented tutorial set. |
 
 Both assembly ones still build:
 

@@ -781,27 +781,25 @@ PutStr:
         ldy     YSAV
         NEXT
 
-; --- signed decimal output -------------------------------------------------
-; Div10 leaves TMP1/10 in TMP1 and the remainder in A.
-Div10:
+; --- signed numeric output -------------------------------------------------
+; TMP1 := TMP1 / BASE, A := the remainder.  A general divide rather than the
+; divide-by-ten this used to be: BASE is a variable, and a BASE that only
+; some of the output words honoured would be worse than none at all.
+DivBase:
         lda     #0
-        sta     TMP2
         ldy     #16
 @l:     asl     TMP1
         rol     TMP1+1
-        rol     TMP2
-        lda     TMP2
-        cmp     #10
+        rol     a
+        cmp     BASEV
         bcc     @skip
-        sbc     #10
-        sta     TMP2
-        inc     TMP1                    ; quotient bit shifts in at the bottom
+        sbc     BASEV
+        inc     TMP1
 @skip:  dey
         bne     @l
-        lda     TMP2
         rts
 
-PrintDec:                               ; value in TMP1
+PrintDec:                               ; value in TMP1, printed in BASE
         lda     TMP1+1
         bpl     @pos
         sec
@@ -815,10 +813,12 @@ PrintDec:                               ; value in TMP1
         jsr     PutChar
 @pos:   ldy     #0
 @digit: sty     YSAV
-        jsr     Div10
+        jsr     DivBase
         ldy     YSAV
-        clc
-        adc     #'0'
+        cmp     #10                     ; past nine the digits are letters
+        bcc     :+
+        adc     #6                      ; carry is set, so this adds seven
+:       adc     #'0'
         sta     NUMBUF,y
         iny
         lda     TMP1
