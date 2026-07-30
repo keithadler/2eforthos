@@ -137,7 +137,13 @@ $(BIN): $(OBJS) src/apple2.cfg
 	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
-disk: $(DSK) $(PDSK)
+# dist/ rides along with every disk build.  The images in dist are
+# committed -- they are how the system runs without the toolchain -- and
+# a committed artifact that only refreshes when someone remembers to ask
+# goes stale silently: the repo shipped a morning-old boot disk for half
+# a day exactly that way.  Refreshing on every build costs a copy; the
+# binary churn in commits is the price of dist never lying again.
+disk: $(DSK) $(PDSK) dist
 
 # The Programs disk: a plain DOS 3.3 filesystem, no boot loader, no kernel,
 # no reserved tracks beyond what the format itself takes.  It is never
