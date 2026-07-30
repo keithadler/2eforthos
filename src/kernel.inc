@@ -97,7 +97,11 @@ FDS      = $1EB4                ; was there a minus
 FDDOT    = $1EB5                ; has the point been seen
 FDANY    = $1EB6                ; has any digit been seen
 NFSAV    = $1EB7                ; 3: the unknown word, kept across the hook
-                                ; $1EBA-$1FFF spare
+PAGE2ON  = $C055                ; with 80STORE, which bank $0400-$07FF is
+PAGE2OFF = $C054
+CINVF    = $1EBA                ; console writes: inverse video?
+COFF     = $1EBB                ; and the byte offset within the row
+                                ; $1EBC-$1FFF spare
 
 .macro  NEXT
         jmp     DoNext

@@ -103,6 +103,15 @@ reference for what it cost to try.)
 
 ![decimals and strings](docs/images/lang-strings.png)
 
+**A menu bar you move with the arrows**, which is what made AppleWorks
+usable by people who did not program. `PICK` lists the disk with a
+highlighted line: arrows move it, Return chooses, Escape backs out — no
+number to read off and retype. Inverse video on the console meant writing
+the screen memory directly, because the firmware sets the high bit on
+every character it prints and the high bit is what makes text normal.
+
+![the menu bar](docs/images/tool-pick.png)
+
 **`MENU` lists the Programs disk and asks which to load** — `2 DRIVE CAT
 n LOAD` folded into a question, and itself just a file that fetches
 itself when named.

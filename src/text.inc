@@ -165,3 +165,70 @@ W_TDOTQUOTE:
         inc     NCNT
         bne     @l
 @done:  NEXT
+
+; ---------------------------------------------------------------------------
+; Writing on the CONSOLE, not the graphics screen.
+;
+; Everything above draws characters into the hi-res bitmap.  These two put
+; them on the ordinary 80-column text screen, at a place you choose, in
+; inverse if you want -- which is the whole of what a menu needs and the
+; one thing the console could not do.
+;
+; It has to bypass the firmware.  COUT sets the high bit on every character
+; it prints, and the high bit is exactly what makes text normal rather than
+; inverse: $00-$3F is an inverse glyph, $80-$FF a normal one.  So this
+; writes the screen memory itself.
+;
+; Eighty columns are two banks.  Even columns live in auxiliary memory and
+; odd ones in main, and with 80STORE set -- which is how the console runs
+; -- PAGE2 is the switch that says which.  Main is put back afterwards,
+; because that is what the firmware expects to find when it next prints.
+;
+; The row addresses are GRROWL/GRROWH from the lo-res driver: the text page
+; and the lo-res screen are the same memory, so they are the same table.
+
+        prim    "CINV", W_CINV, 0       ; flag --
+        lda     0,x
+        ora     1,x
+        sta     CINVF
+        inx
+        inx
+        NEXT
+
+        prim    "CPUT", W_CPUT, 0       ; c col row --
+        lda     0,x                     ; row
+        cmp     #24
+        bcs     @done                   ; off the screen: drop it silently
+        tay
+        lda     GRROWL,y
+        sta     UTMP
+        lda     GRROWH,y
+        sta     UTMP+1
+        lda     2,x                     ; column
+        cmp     #80
+        bcs     @done
+        pha
+        lsr     a                       ; two columns to the byte
+        sta     COFF
+        pla
+        and     #1
+        bne     @main
+        sta     PAGE2ON                 ; even: auxiliary memory
+        beq     @put                    ; A is zero, so always
+@main:  sta     PAGE2OFF
+@put:   lda     4,x                     ; the character
+        ldy     CINVF
+        bne     @inv
+        ora     #$80                    ; normal video
+        bne     @store                  ; the high bit is set, so always
+@inv:   and     #$3F                    ; inverse video
+@store: ldy     COFF
+        sta     (UTMP),y
+        sta     PAGE2OFF                ; leave main banked, as found
+@done:  inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        NEXT
