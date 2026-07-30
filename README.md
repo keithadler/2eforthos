@@ -778,11 +778,12 @@ suite runs. Going headless takes both halves of the incantation:
 take a snapshot in that state, which is what makes `make run` useful and how
 every image in `docs/` was captured.
 
-## The built disk
+## The built disks
 
 `dist/2eforthos.dsk` is a bootable 140K DOS-order image, committed so the
 system can be run without cc65 or a2kit: it boots to the Forth prompt in
-about thirty seconds.
+about thirty seconds. `dist/programs.dsk` is the Programs disk beside it —
+the examples, the games, and the free space — for drive 2.
 
 **You still need the ROMs.** Apple's are not ours to redistribute and are not
 in this repository — `make roms` rebuilds the set from AppleWin and apple2js,
@@ -793,7 +794,8 @@ monitor prompt, which looks like the image being broken and is not.
 ```bash
 make roms                                  # once: rebuild roms/ from source
 cd ~/2eforthos
-mame apple2ee -rompath ./roms -sl4 "" -flop1 dist/2eforthos.dsk
+mame apple2ee -rompath ./roms -sl4 "" -flop1 dist/2eforthos.dsk \
+  -flop2 dist/programs.dsk
 ```
 
 `-rompath` is the part people miss, and `-sl4 ""` empties a slot whose
