@@ -1216,6 +1216,8 @@ TESTS = {
     clear
     type MENU
     wait 900
+    type 
+    wait 900
     type 99
     wait 900
     depth 0
@@ -1283,6 +1285,8 @@ TESTS = {
     wait 900
     type MENU
     wait 4800
+    type 
+    wait 900
     clear
     type S" 12" MNUM
     stack -1 12
@@ -1387,6 +1391,27 @@ TESTS = {
     clear
     type PARSE-NAME FOO NIP
     stack 3
+""",
+
+# Life: the glider is the proof -- four generations move it one cell down
+# and one right, or the rules are wrong.  The paging CAT is exercised by
+# the MENU flows against the 28-file catalog.
+"life": """
+    wait 300
+    type LIFE
+    wait 4800
+    clear
+    type GLIDER GEN GEN GEN GEN
+    wait 4200
+    type CUR @ WA =
+    wait 600
+    stack -1
+    clear
+    type 7 6 CUR @ CELL C@  8 8 CUR @ CELL C@  6 5 CUR @ CELL C@
+    stack 0 1 1
+    clear
+    type 1 1 RULE 1 2 RULE 1 3 RULE 1 4 RULE 0 3 RULE 0 2 RULE
+    stack 0 1 0 1 1 0
 """,
 
 # The DREAD comes with the head deliberately left BETWEEN tracks by DHALF,
@@ -1904,6 +1929,22 @@ TESTS = {
     type ENTRIES
     wait 1200
     shot
+""",
+
+"shot-life": """
+    wait 300
+    drive 2
+    wait 600
+    load LIFE.FTH
+    wait 3000
+    clear
+    type WCLR GLIDER
+    type 1 14 8 WA CELL C! 1 15 8 WA CELL C! 1 16 8 WA CELL C!
+    type 1 10 14 WA CELL C! 1 11 14 WA CELL C! 1 10 15 WA CELL C! 1 11 15 WA CELL C!
+    type GR 0 GCLS DRAW-ALL GEN GEN
+    wait 4800
+    shot
+    type TEXT
 """,
 
 "gfxlib": """
