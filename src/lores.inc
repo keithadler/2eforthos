@@ -30,11 +30,28 @@ GrMode:
 ; picture: every line echoed and every OK printed lands in the same memory
 ; the blocks are in.  Applesoft's GR reserves the bottom four rows for text
 ; and this does the same.  TEXT puts the window back.
+;
+; Moving the window is not enough on its own: the CURSOR stays wherever the
+; dialog had reached, and WNDTOP only fences scrolling, not printing.  Start
+; GR with the cursor at row 5 and the next echoed line lands in the picture
+; -- one typed digit became a pink block in a bar chart, appearing and
+; vanishing with the parity of how much had been printed before.  The
+; monitor's own SETGR ends by dropping the cursor to row 23 with TABV, and
+; so does this.
+TABV    = $FB5B                 ; A -> CV, then recompute the base address
+GrCursorHome:
+        ROMIN
+        lda     #23
+        jsr     TABV
+        ROMOUT
+        rts
+
         prim    "GR", W_GR, 0           ; graphics with four lines of text
         jsr     GrMode
         bit     MIXSET
         lda     #20
         sta     WNDTOP
+        jsr     GrCursorHome
         lda     #0
         jsr     GrClear
         NEXT
@@ -44,6 +61,7 @@ GrMode:
         bit     MIXCLR
         lda     #20                     ; still, so output cannot land on it
         sta     WNDTOP
+        jsr     GrCursorHome
         lda     #0
         jsr     GrClear
         NEXT
@@ -199,9 +217,5 @@ GRROWH:
         .endrep
 
         .segment "DATA"
-GCOL:    .byte  15
-GLX:     .byte  0
-GLY:     .byte  0
-GRT:    .byte  0
-GTMP2:   .byte  0
+GCOL:    .byte  15              ; the rest of the lo-res scratch: kernel.inc
         .segment "CODE"

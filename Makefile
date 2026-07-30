@@ -28,7 +28,13 @@ SHOTS   := $(CURDIR)/shots
 SRCS    := $(wildcard $(SRCDIR)/*.s)
 # forth.s pulls the system in with .include, so every .inc is a dependency
 INCS    := $(wildcard src/*.inc)
-DISKFILES := $(wildcard disk/*) $(wildcard examples/*.FTH)
+# The boot disk carries the system and its own documentation; every code
+# sample lives on the Programs disk in drive 2, which is also where big
+# programs get built -- it has no kernel underneath it, so nearly the whole
+# floppy is free.
+DISKFILES := $(wildcard disk/*)
+PROGFILES := $(wildcard examples/*.FTH)
+PDSK      := build/programs.dsk
 # Generated into build/: the font is carved out of the Apple character ROM,
 # and the boot source is src/system.fth converted to a byte table.
 GENERATED := build/font.inc build/srcsecs.inc
@@ -131,9 +137,19 @@ $(BIN): $(OBJS) src/apple2.cfg
 	ld65 -C src/apple2.cfg -S $(ORG) -m build/$(PROG).map -Ln build/$(PROG).lbl -o $@ $(OBJS)
 	@echo "$@: $$(wc -c < $@ | tr -d ' ') bytes loading at $(ORG)"
 
-disk: $(DSK)
+disk: $(DSK) $(PDSK)
 
-$(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth
+# The Programs disk: a plain DOS 3.3 filesystem, no boot loader, no kernel,
+# no reserved tracks beyond what the format itself takes.  It is never
+# booted from, only mounted in drive 2.
+$(PDSK): $(PROGFILES)
+	@rm -f $@
+	$(A2KIT) mkdsk -v 253 -t do -o dos33 -d $@
+	@for f in $(PROGFILES); do \
+	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
+	@$(A2KIT) catalog -d $@
+
+$(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth Makefile
 	@rm -f $@
 	$(A2KIT) mkdsk -v $(VOLUME) -t do -o dos33 -d $@
 	@python3 tools/mkdisk.py --reserve $@ build/bootsrc.bin
@@ -149,16 +165,18 @@ $(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth
 # The OS writes to its own disk (delete, rename, lock), and MAME writes those
 # changes back to the image.  Automated runs boot a scratch copy so they stay
 # reproducible; `make gui` uses the real image so interactive changes stick.
-run: $(DSK) monitor
+run: $(DSK) $(PDSK) monitor
 	@rm -rf $(SHOTS)/$(MACHINE)
 	@cp $(DSK) build/run.dsk
+	@cp $(PDSK) build/run2.dsk
 	$(MAME_HEADLESS) mame $(MAME_COMMON) $(MAME_NOVIDEO) -flop1 build/run.dsk \
+	  -flop2 build/run2.dsk \
 	  -nothrottle -seconds_to_run $(SECS)
 	@echo "screenshot -> $(SHOTS)/$(MACHINE)/0000.png"
 
-gui: $(DSK) monitor
+gui: $(DSK) $(PDSK) monitor
 	BOOTSPEED=$(SPEED) BOOTFRAMES=$(BOOTFRAMES) \
-	  mame $(MAME_COMMON) $(MAME_WINDOW) -flop1 $(DSK) \
+	  mame $(MAME_COMMON) $(MAME_WINDOW) -flop1 $(DSK) -flop2 $(PDSK) \
 	  -autoboot_delay 0 -autoboot_script tools/fastboot.lua
 
 # Type Forth at the console and check machine state afterwards.  Each test is
@@ -168,12 +186,14 @@ gui: $(DSK) monitor
 # The shipped image.  build/ is scratch and is rebuilt constantly; this is
 # the copy that is committed, refreshed deliberately rather than by every
 # build, so it changes only when someone means it to.
-dist: $(DSK)
+dist: $(DSK) $(PDSK)
 	@mkdir -p dist
 	@cp $(DSK) dist/2eforthos.dsk
+	@cp $(PDSK) dist/programs.dsk
 	@echo "dist/2eforthos.dsk: $$(wc -c < dist/2eforthos.dsk) bytes"
+	@echo "dist/programs.dsk: $$(wc -c < dist/programs.dsk) bytes"
 
-test: $(DSK) monitor
+test: $(DSK) $(PDSK) monitor
 	python3 tools/contest.py $(T)
 
 # The standalone path that predates the kernel: assemble one file and run

@@ -74,6 +74,30 @@ D2NIBA  = $0C00
         bne     @push
         NEXT
 
+; DRVSEL -- choose which drive the controller talks to.  1 or 2; anything
+; else is treated as 1, because a wrong drive number must not become a
+; wrong latch address.  Switching forgets the motor and the head position:
+; the other drive's platter is not up to speed and its head is wherever
+; the last session on it left it, so the next operation pays one spin-up
+; and one recalibration.  DRIVE in system.fth wraps this and reloads the
+; catalog, which is almost always what switching is for.
+        prim    "DRVSEL", W_DRVSEL, 0   ; n --
+        lda     0,x
+        inx
+        inx
+        cmp     #2
+        beq     :+
+        lda     #1
+:       sec
+        sbc     #1
+        cmp     D2DRVN
+        beq     @same                   ; reselecting costs nothing
+        sta     D2DRVN
+        lda     #0
+        sta     D2MOTRUN
+        sta     D2READY
+@same:  NEXT
+
 ; DRECAL -- recalibrate to track 0 and say so.  Split out from DSEEK so the
 ; two halves of the positioning can be blamed separately.
         prim    "DRECAL", W_DRECAL, 0

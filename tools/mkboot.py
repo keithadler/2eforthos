@@ -61,6 +61,17 @@ def main(argv):
                              f"over the {MAX_LINE}-char input buffer")
         lines.append(stripped)                          # indentation is space
 
+    # SRCEND -- the last track the source lands on -- is a fact only this
+    # script knows, and INIT needs it on the machine to keep a formatted
+    # boot disk bootable.  It used to be a kernel primitive, which cost
+    # main-memory bytes PICSAVE could not spare; injected as the first
+    # streamed line it compiles into the language card instead.  The value
+    # is patched in after packing, at fixed width, so the count of sectors
+    # it is derived from cannot be changed by the patch itself.
+    lines.insert(0, "99 CONSTANT SRCEND")
+    sectors = pack(lines)
+    end = SRCTRACK + (len(sectors) - 1) // 16
+    lines[0] = f"{end:2} CONSTANT SRCEND"
     sectors = pack(lines)
     binary.write_bytes(b"".join(sectors))
     inc.write_text(

@@ -129,16 +129,12 @@ NCNT:    .byte  0
 NNEG:    .byte  0
 FFLAGS:  .byte  0                       ; flags byte of the header being tested
 FCHR:    .byte  0
-NBKT:    .byte  0                       ; bucket of the header being created
 
 ; The hash buckets (BUCKETS, BTAILS) and the numeric output buffer (NUMBUF)
 ; live at absolute addresses above the catalog -- see the map in kernel.inc.
 ; Nothing uninitialized belongs in this segment: a .res here would ship as
 ; zeros in the image and cost the same bytes again in dictionary headroom.
-NEWHDR:  .word  0                       ; header being built
-STRLEN:  .word  0                       ; count byte of a compiling string
-CFLO:    .byte  0
-CFHI:    .byte  0
+; NBKT, NEWHDR, STRLEN, CFLO and CFHI are above the catalog: kernel.inc
 
 ; $80 makes the drawing words XOR what they draw instead of replacing it, so
 ; the same call both draws and erases: drawing a shape twice leaves the screen

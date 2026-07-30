@@ -320,8 +320,17 @@ a buffer and the string is whatever is left between the pointer and the end.
 | `KEY?` | `( -- flag )` | is one waiting, without taking it |
 | `KEYC` | `( -- c )` | take the waiting key |
 | `ASKLN` | `( -- addr u )` | read a line |
+| `PARSE-NAME` | `( -- addr u )` | the next word on the current line, u=0 if none |
 | `BTN` | `( -- flag )` | game port button 0 |
 | `PADDLE` | `( n -- u )` | game port channel `n`, 0..255 |
+
+`PARSE-NAME` is how a word takes an argument from the line it was typed on:
+`HELP HGR` is `HELP` calling it and finding `HGR`. The text lives in the
+input buffer and lasts only until the next line is read.
+
+`HELP` alone prints a command summary; `HELP NAME` prints one word's entry.
+Both come from the `HELPTEXT` file on the system disk — data, not code, so
+editing it costs no dictionary and adding an entry is adding text.
 
 `PADDLE` waits out the game port's timer afterwards. It returns the moment
 its capacitor has discharged, so a small reading returns early and leaves the
@@ -514,6 +523,12 @@ time: the VTOC is sector 0 and the first catalog sector is 15.
 
 ## Files
 
+Two drives. Drive 1 is the system's own disk; drive 2 is the Programs disk —
+no kernel underneath it, so nearly the whole floppy is free, and it is where
+the examples live and big programs get built. `n DRIVE` switches; everything
+below acts on the current drive.
+
+
 Reading a file a byte or a line at a time, for data rather than source.
 `FGETC` hands back every byte of every sector the file was allocated, high
 bit and all — DOS keeps no byte count for a text file, so where one stops is
@@ -552,6 +567,8 @@ so rather than writing into the I/O page.
 | Word | Effect | |
 |---|---|---|
 | `CAT` | | list the disk |
+| `DRIVE` | `( n -- )` | switch to drive 1 or 2 and reload the catalog |
+| `FINDF` | `( addr len -- n )` | a file's catalog number by name, or -1 |
 | `FREE` | `( -- u )` | free sectors |
 | `LOCK` | `( n -- )` | toggle the lock on a file |
 | `DEL` | `( n -- )` | delete one; locked files are refused |

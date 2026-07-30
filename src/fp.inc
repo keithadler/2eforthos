@@ -490,7 +490,6 @@ FBinary:
 RSEED:   .word  $A5C3
 CALLV:   jmp    $0000                    ; patched, then called
 FPSP:     .byte  0                        ; floats on the stack
-FTMP:    .word  0
 ; FZSAVE and FSTK are above the catalog with the other buffers: kernel.inc
 FOFF:    .byte  0, 5, 10, 15, 20, 25, 30, 35, 40
 FCALL:   jmp    $0000                    ; patched, then called

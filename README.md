@@ -61,6 +61,17 @@ built in: a press becomes an `EV-DOWN` at the right coordinates and
 
 ![events and hit testing](docs/images/ex-pointer.png)
 
+**Games, because the machine was for them.** Lunar lander with fixed-point
+physics, the Breakout Woz built the hardware for, and the sombrero every
+Apple II drew sooner or later — all in Forth, all on the Programs disk in
+drive 2, all played from the prompt.
+
+![lunar lander](docs/images/game-lander.png)
+
+![breakout](docs/images/game-breakout.png)
+
+![the hat](docs/images/game-hat.png)
+
 **Its own filesystem, without DOS underneath it.** `CAT` reads the catalog
 through a Disk II driver written from scratch — half-track seeking, 6-and-2
 decoding, address fields matched inside a 32-cycle window.
@@ -77,6 +88,8 @@ turn on when a program wants them.
 
 | command | |
 |---|---|
+| `HELP HGR` | help for any word, read from a file you can edit |
+| `2 DRIVE` | switch to the Programs disk — the examples and your big programs |
 | `CAT` | list the disk — number, lock, name, type, size |
 | `n LOAD` | compile a Forth source file off the floppy |
 | `n LOCK` | lock or unlock file *n* |
@@ -95,6 +108,11 @@ HGR  3 HCOLOR  280 96 80 HCIRCLE  40 520 20 170 HFRAME
 0 0 TAT T." DRAWN FROM THE PROMPT"
 TEXT
 ```
+
+**Two floppies.** The system disk boots in drive 1 with the OS, the help
+file and little else; the Programs disk in drive 2 carries every example —
+lunar lander, Breakout, the hat — and 350-odd free sectors for what you
+build. `2 DRIVE` switches, `1 DRIVE` comes home.
 
 **The OS writes to its own disk.** Lock, rename and delete all go through to
 the image, and MAME writes it back — delete a file inside the emulator and
@@ -146,7 +164,7 @@ verifies every CRC.
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `examples/*.FTH` | twenty-three Forth programs, all put on the floppy by `make disk` |
+| `examples/*.FTH` | twenty-six Forth programs — demos, tutorials, and games — put on the Programs disk by `make disk` |
 | `disk/*` | the plain text files that also go on it |
 | `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
@@ -445,7 +463,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `examples/*.FTH` | twenty-three Forth programs on the floppy — six graphical demos and a commented tutorial set. |
+| `examples/*.FTH` | twenty-six Forth programs on the Programs disk — demos, a commented tutorial set, and three games. |
 
 Both assembly ones still build:
 
