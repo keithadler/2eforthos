@@ -272,9 +272,15 @@ VARIABLE FFA VARIABLE FFL VARIABLE FFI
   DUP CATENT 6 + 30 TYPE SPACE
   DUP CATENT C@ FTYPE EMIT SPACE
   CATENT 1+ C@ 3 .R ;
+\ Twenty entries a screenful, then wait -- the Programs disk outgrew the
+\ screen and the top of the catalog was scrolling away.  Any key turns
+\ the page, Q stops early, and a catalog that fits never pauses at all.
+: CPAGE ( i -- f )
+  1+ DUP 20 MOD 0= SWAP NFILE @ < AND IF
+    ." --MORE--" BEGIN KEY? UNTIL KEYC CR 81 = ELSE 0 THEN ;
 : CAT
   ."  #  NAME                           T SIZ" CR
-  NFILE @ 0 DO I .ENT CR LOOP
+  NFILE @ 0 DO I .ENT CR I CPAGE IF LEAVE THEN LOOP
   NFREE @ . ." SECTORS FREE" CR ;
 
 \ --- the file commands -----------------------------------------------------
