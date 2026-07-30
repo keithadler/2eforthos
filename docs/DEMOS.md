@@ -48,6 +48,9 @@ them:
 - **MENU.FTH** — `MENU` switches to the Programs disk, lists it, and asks
   which number to load: the whole of `2 DRIVE CAT n LOAD` folded into a
   question.
+- **RAMDISK.FTH** — a RamWorks memory card as drive 3: a whole disk at
+  memory speed, formatted on first use, volatile. `LIB RAMDISK.FTH`,
+  then `3 DRIVE`.
 - **GFXLIB.FTH** — arcs, ellipses, pie slices and block save/restore.
   `LIB GFXLIB.FTH` loads it by name from either drive and puts your
   drive back, so a program on drive 2 can ask for it in one line.

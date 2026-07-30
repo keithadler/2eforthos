@@ -1219,6 +1219,44 @@ TESTS = {
     depth 0
 """,
 
+# The RAM disk: LIB RAMDISK.FTH probes the RamWorks card MAME carries in
+# the aux slot, and drive 3 becomes a 560-sector volume in banks 1-3 --
+# auto-formatted on first use, instant, volatile.  The guard before the
+# LIB proves the resident system refuses drive 3 until the library is in.
+"ramdisk": """
+    wait 300
+    type 3 DRIVE
+    wait 600
+    depth 0
+    type LIB RAMDISK.FTH
+    wait 4200
+    clear
+    type NBK @
+    stack 16
+    clear
+    type 3 DRIVE
+    wait 2400
+    filesabs 0
+    type S" : RWORD 777 ;" SAVE
+    type RAM.FTH
+    wait 1500
+    filesabs 1
+    clear
+    loadwith RAM.FTH LOAD
+    wait 900
+    type RWORD
+    stack 777
+    clear
+    type FREE
+    wait 600
+    stack 542
+    clear
+    type 1 DRIVE
+    wait 900
+    type NFILE @ 0>
+    stack -1
+""",
+
 # HELP with a name reads the entry out of HELPTEXT on the system disk;
 # plain HELP is the entry named HELP.  A word with no entry says so.
 "help": """
@@ -2325,6 +2363,7 @@ def run(name, script, keep_shots=False):
                SYMS=symarg, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
     cmd = [
         "mame", "apple2ee", "-rompath", str(ROOT / "roms"), "-sl4", "",
+        "-aux", "rw3",
         "-gameio", "joy", "-cfg_directory", str(ROOT / "cfg"),
         "-flop1", str(DISK), "-flop2", str(PDISK), "-skip_gameinfo",
         # No window and no sound: the tests read memory, not the screen, and

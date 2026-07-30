@@ -523,10 +523,13 @@ time: the VTOC is sector 0 and the first catalog sector is 15.
 
 ## Files
 
-Two drives. Drive 1 is the system's own disk; drive 2 is the Programs disk —
-no kernel underneath it, so nearly the whole floppy is free, and it is where
-the examples live and big programs get built. `n DRIVE` switches; everything
-below acts on the current drive.
+Three drives. Drive 1 is the system's own disk; drive 2 is the Programs
+disk — no kernel underneath it, so nearly the whole floppy is free, and it
+is where the examples live and big programs get built. Drive 3 is a RAM
+disk, if the machine carries a RamWorks-style memory card: `LIB RAMDISK.FTH`
+probes the card and, finding it, makes banks 1–3 a full 560-sector volume —
+formatted on first use, instant, and gone at power-off. `n DRIVE` switches;
+everything below acts on the current drive.
 
 
 Reading a file a byte or a line at a time, for data rather than source.

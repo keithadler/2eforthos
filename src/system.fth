@@ -145,6 +145,13 @@ VARIABLE FX1 VARIABLE FX2 VARIABLE FY1 VARIABLE FY2
 \ succeed first time.
 VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
 VARIABLE WROTE
+VARIABLE DRV  1 DRV !
+\ Drive 3 is a RAM disk on a RamWorks-style memory card, and everything
+\ about it lives in RAMDISK.FTH on this disk -- loaded with LIB, it fills
+\ these vectors and DRIVE starts accepting 3.  The system only carries
+\ the fork, so a machine without the card pays three cells for the whole
+\ feature.
+VARIABLE 'ARD VARIABLE 'AWR VARIABLE 'D3F
 16 CONSTANT DTRIES
 : DPAUSE 5000 0 DO LOOP ;               \ about a quarter of a second
 \ What was measured, not deduced: a read shortly after a write cannot be
@@ -159,7 +166,9 @@ VARIABLE WROTE
 \ -- so only the first read after writing pays.
 : DSETTLE WROTE @ IF 0 DSEEK DPAUSE 0 WROTE ! THEN ;
 : RD ( t s addr -- ok )
-  RDA ! RDS ! RDT ! DSETTLE
+  RDA ! RDS ! RDT !
+  DRV @ 3 = IF RDT @ RDS @ RDA @ 'ARD @ EXECUTE EXIT THEN
+  DSETTLE
   DTRIES 0 DO
     RDT @ RDS @ RDA @ DREAD DUP DERR !
     0= IF -1 UNLOOP EXIT THEN
@@ -167,6 +176,7 @@ VARIABLE WROTE
   LOOP 0 ;
 : WR ( t s addr -- ok )
   RDA ! RDS ! RDT !
+  DRV @ 3 = IF RDT @ RDS @ RDA @ 'AWR @ EXECUTE EXIT THEN
   DTRIES 0 DO
     RDT @ RDS @ RDA @ DWRITE DUP DERR !
     0= IF -1 -1 WROTE ! UNLOOP EXIT THEN
@@ -216,15 +226,17 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
   35 0 DO SECBUF 56 + I 4 * +
     DUP C@ BITS SWAP 1+ C@ BITS + + LOOP ;
 
-\ Two drives.  Drive 1 is the system's own disk; drive 2 is the Programs
+\ Three drives.  Drive 1 is the system's own disk; drive 2 the Programs
 \ disk, all free space and no kernel underneath it -- where anything big
-\ belongs.  Switching selects the drive and reloads the catalog, so CAT,
-\ LOAD and the file commands all mean the new disk from here on.  DRV
-\ remembers which, for the words that treat the boot disk specially.
-VARIABLE DRV  1 DRV !
+\ belongs; drive 3 a RAM disk, if a memory card is there and RAMDISK.FTH
+\ has been loaded to run it.  Switching selects the drive and reloads the
+\ catalog, so CAT, LOAD and the file commands all mean the new disk from
+\ here on.
 : DRIVE ( n -- )
-  DUP 1 < OVER 2 > OR IF DROP ." 1 OR 2" CR EXIT THEN
-  DUP DRV ! DRVSEL
+  DUP 1 < OVER 3 > OR IF DROP ." 1 2 OR 3" CR EXIT THEN
+  DUP 3 = 'ARD @ 0= AND IF DROP ." LIB RAMDISK.FTH FIRST" CR EXIT THEN
+  DUP DRV !  3 < IF DRV @ DRVSEL THEN
+  DRV @ 3 = IF 'D3F @ EXECUTE THEN
   CATLOAD FREE NFREE !
   ." DRIVE " DRV @ . NFILE @ . ." FILES " NFREE @ . ." FREE" CR ;
 
