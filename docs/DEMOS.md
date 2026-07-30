@@ -58,6 +58,35 @@ system disk and fetches itself, from either drive.
 
 ---
 
+## PAINT — ForthPaint
+
+`examples/PAINT.FTH` — type `PAINT`; it fetches itself. The paddles (or
+the mouse, where the emulator maps it) aim a crosshair, the button inks,
+and the number keys pick the tool: pen, line, box, disc, flood fill.
+`X` turns on XOR drawing, so a mark made twice unmakes itself; `S` saves
+the screen as two binary files and `n1 n2 RESUME` puts a saved picture
+back on the easel. Every mark is made with the same drawing words you
+can type at the prompt — the program is a loop around the language.
+
+## WRITE — ForthWrite
+
+`examples/WRITE.FTH` — type `WRITE` and start typing prose. When a word
+runs past the right margin it is carried whole onto the next line;
+RETURN ends a paragraph, DELETE rubs out, ESC finishes. `WLIST` reads
+the document back, `WSAVE` keeps it as a text file, `n WLOAD` continues
+a saved one. The document is the same shape EDIT uses, so the two open
+each other's files.
+
+## LEDGER
+
+`examples/LEDGER.FTH` — the business case, because somebody always asks.
+Amounts are exact cents in double cells — floating point is for curves,
+not money — and each entry is a word: `1250 00 IN SALARY`, `3 15 OUT
+COFFEE`, `ENTRIES` for the book with a running balance, `LSAVE` to keep
+it as a text file a spreadsheet could read off a null modem.
+
+---
+
 ## LANDER
 
 `examples/LANDER.FTH` — `CAT` for its number, then `n LOAD`, then `LANDER`.

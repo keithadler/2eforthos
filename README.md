@@ -72,6 +72,15 @@ drive 2, all played from the prompt.
 
 ![the hat](docs/images/game-hat.png)
 
+**Applications, not just demos.** ForthPaint — paddles aim, button inks,
+five tools, XOR undo, save and resume. ForthWrite composes prose with word
+wrap. And a ledger that keeps exact cents in double cells, because floating
+point is for curves, not money. Each fetches itself when named.
+
+![ForthPaint](docs/images/app-paint.png)
+
+![the ledger](docs/images/app-ledger.png)
+
 **Its own filesystem, without DOS underneath it.** `CAT` reads the catalog
 through a Disk II driver written from scratch — half-track seeking, 6-and-2
 decoding, address fields matched inside a 32-cycle window.
@@ -176,7 +185,7 @@ verifies every CRC.
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `examples/*.FTH` | twenty-five Forth programs — demos, tutorials, and games — put on the Programs disk by `make disk` |
+| `examples/*.FTH` | twenty-eight Forth programs — demos, tutorials, games, and applications — put on the Programs disk by `make disk` |
 | `disk/*` | the plain text files that also go on it |
 | `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
@@ -475,7 +484,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `examples/*.FTH` | twenty-five Forth programs on the Programs disk — demos, a commented tutorial set, and three games. |
+| `examples/*.FTH` | twenty-eight Forth programs on the Programs disk — demos, a commented tutorial set, three games, and three applications. |
 
 Both assembly ones still build:
 
