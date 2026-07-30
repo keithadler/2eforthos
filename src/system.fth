@@ -853,6 +853,20 @@ $4000 CONSTANT PICLEN
   AUXBANK   HERE 8192 + $2000 8192 MOVE
   MAINBANK ;
 
+\ --- loading a library ------------------------------------------------------
+\ Libraries live on the system disk in drive 1; programs live on drive 2.
+\ LIB NAME fetches a library from the system disk wherever you happen to
+\ be, and puts your drive back -- so a program's instructions can say
+\ LIB GFXLIB.FTH without caring which drive is current or what number
+\ the catalog gives the file today.  Like LOAD, it is a word for the
+\ prompt, not for the middle of a file being loaded.
+: LIB ( -- )
+  PARSE-NAME DUP 0= IF 2DROP ." LIB NAME" CR EXIT THEN
+  DRV @ >R
+  R@ 1 <> IF 1 DRVSEL CATLOAD THEN
+  FINDF DUP 0< IF DROP ." NOT ON THE SYSTEM DISK" CR ELSE LOAD THEN
+  R> DUP 1 <> IF DUP DRV ! DRVSEL CATLOAD FREE NFREE ! ELSE DROP THEN ;
+
 \ --- help -------------------------------------------------------------------
 \ HELP alone prints the summary below.  HELP NAME looks NAME up in the
 \ HELPTEXT file on the system disk: an entry is a line beginning with the

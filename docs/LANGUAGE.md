@@ -568,6 +568,7 @@ so rather than writing into the I/O page.
 |---|---|---|
 | `CAT` | | list the disk |
 | `DRIVE` | `( n -- )` | switch to drive 1 or 2 and reload the catalog |
+| `LIB` | | `LIB GFXLIB.FTH` — load a library off the system disk by name, from either drive |
 | `FINDF` | `( addr len -- n )` | a file's catalog number by name, or -1 |
 | `FREE` | `( -- u )` | free sectors |
 | `LOCK` | `( n -- )` | toggle the lock on a file |

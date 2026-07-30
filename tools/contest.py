@@ -1409,9 +1409,7 @@ TESTS = {
 """,
 
 "shot-arc": """
-    drive 2
-    wait 600
-    load GFXLIB.FTH
+    type LIB GFXLIB.FTH
     wait 2400
     clear
     type HGR HCLS 3 HCOLOR
@@ -1732,9 +1730,7 @@ TESTS = {
 """,
 
 "gfxlib": """
-    drive 2
-    wait 600
-    load GFXLIB.FTH
+    type LIB GFXLIB.FTH
     wait 2400
     clear
     type HGR HCLS 3 HCOLOR
@@ -2147,9 +2143,7 @@ TESTS = {
 # An arc, now that FSIN and FCOS exist.  At zero degrees the point is due
 # right of the centre; at ninety it is directly below, y growing downward.
 "arc": """
-    drive 2
-    wait 600
-    load GFXLIB.FTH
+    type LIB GFXLIB.FTH
     wait 2400
     clear
     type HGR HCLS 3 HCOLOR
