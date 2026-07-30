@@ -164,7 +164,7 @@ verifies every CRC.
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `examples/*.FTH` | twenty-six Forth programs — demos, tutorials, and games — put on the Programs disk by `make disk` |
+| `examples/*.FTH` | twenty-five Forth programs — demos, tutorials, and games — put on the Programs disk by `make disk` |
 | `disk/*` | the plain text files that also go on it |
 | `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
@@ -463,7 +463,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `examples/*.FTH` | twenty-six Forth programs on the Programs disk — demos, a commented tutorial set, and three games. |
+| `examples/*.FTH` | twenty-five Forth programs on the Programs disk — demos, a commented tutorial set, and three games. |
 
 Both assembly ones still build:
 

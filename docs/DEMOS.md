@@ -36,10 +36,11 @@ overwrite what was left of it.
 
 ---
 
-## Tools on the system disk
+## Tools and libraries on the system disk
 
-Drive 1 carries two loadable tools alongside the OS. `CAT` on drive 1
-shows them:
+Drive 1 carries the loadable tools and libraries alongside the OS —
+things you reach for whatever you are building. `CAT` on drive 1 shows
+them:
 
 - **MORE.FTH** — `n MORE` pages through any text file twenty-two lines at
   a time; any key turns the page, `Q` stops. `HELPTEXT` and your own
@@ -47,6 +48,9 @@ shows them:
 - **MENU.FTH** — `MENU` switches to the Programs disk, lists it, and asks
   which number to load: the whole of `2 DRIVE CAT n LOAD` folded into a
   question.
+- **GFXLIB.FTH** — arcs, ellipses, pie slices and block save/restore.
+  `LIB GFXLIB.FTH` loads it by name from either drive and puts your
+  drive back, so a program on drive 2 can ask for it in one line.
 
 ---
 
@@ -322,7 +326,7 @@ compiler already had.
 | `DISKIO.FTH` | raw sectors, and writing a file |
 | `EDIT.FTH` | **a line editor** — write code on the machine instead of the host |
 | `FINANCE.FTH` | compound interest and loan payments on the ROM's floats |
-| `GFXLIB.FTH` | polygons, ellipses, arcs, and saving what is under a sprite |
+| `GFXLIB.FTH` | polygons, ellipses, arcs, and saving what is under a sprite — on the **system disk**, `LIB GFXLIB.FTH` loads it |
 
 **Writing code on the machine.** `EDIT.FTH` is a line editor, and it closes
 the loop this system did not have: until it, source lived on the host and
