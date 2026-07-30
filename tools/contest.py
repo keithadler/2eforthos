@@ -2008,6 +2008,29 @@ TESTS = {
     type 0 2 MENU-PICK
     wait 900
     stack -1
+    clear
+    \ scrolling: the window is twenty rows and the disk has more files
+    \ than that, so the last of them can only be reached by the list
+    \ moving under the bar.
+    type ' CATNAME 'MI ! NFILE @ MN ! 2 MTOP ! 20 MVIS ! 0 MSEL ! 0 MFIRST !
+    wait 600
+    depth 0
+    clear
+    type 19 MMOVE MFIRST @
+    wait 600
+    stack 0
+    clear
+    type 20 MMOVE MFIRST @ MSEL @
+    wait 900
+    stack 20 1
+    clear
+    type NFILE @ 1- MMOVE MSEL @ NFILE @ 1- =
+    wait 900
+    stack -1
+    clear
+    type 0 MMOVE MFIRST @ MSEL @
+    wait 900
+    stack 0 0
 """,
 
 "picture-roundtrip": """
@@ -2132,8 +2155,11 @@ TESTS = {
     type MENUS
     wait 4800
     clear
-    type PICK
-    wait 2400
+    type : MSET ['] CATNAME 'MI ! NFILE @ MN ! 2 MTOP ! 20 MVIS ! 0 MSEL ! 0 MFIRST ! ;
+    type : MEND PAGE S" CHOOSE A PROGRAM   ARROWS  RETURN  ESC" 2 0 CTYPE MSET NFILE @ 1- MMOVE BEGIN KEY? UNTIL ;
+    wait 900
+    type MEND
+    wait 3000
     shot
 """,
 

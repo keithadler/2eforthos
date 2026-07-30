@@ -106,7 +106,9 @@ reference for what it cost to try.)
 **A menu bar you move with the arrows**, which is what made AppleWorks
 usable by people who did not program. `PICK` lists the disk with a
 highlighted line: arrows move it, Return chooses, Escape backs out — no
-number to read off and retype. Inverse video on the console meant writing
+number to read off and retype. The list scrolls, so a disk with more
+files than the screen has rows still offers all of them; below is the
+same menu wound to its end. Inverse video on the console meant writing
 the screen memory directly, because the firmware sets the high bit on
 every character it prints and the high bit is what makes text normal.
 
