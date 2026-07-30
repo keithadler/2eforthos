@@ -60,6 +60,40 @@ ColdStart:
         jsr     HOME
         ROMOUT
         ldx     XSAV
+        ; Count the auxiliary banks, so the banner can say what the machine
+        ; actually has instead of asserting 128K at everyone.  The two
+        ; ten-byte accessors run from the stack page -- RAMRD banks every
+        ; read from $0200 up, instruction fetches included -- and the loop
+        ; stamps a canary in bank 0 beside each candidate: the first stamp
+        ; that kills the canary is the first bank that is not real.  On a
+        ; machine with no card the register is ignored, bank 1 IS bank 0,
+        ; and the count stays 1: the stock 128K.
+        ldy     #AUXPROBE_LEN-1
+@cpau:  lda     AUXPROBE,y
+        sta     $0100,y
+        dey
+        bpl     @cpau
+        lda     #1
+        sta     CARDBK
+@bank:  lda     #0                      ; canary into bank 0
+        sta     $C073
+        lda     #$A5
+        jsr     $0100                   ; write A to aux $0200
+        lda     CARDBK                  ; candidate bank gets its number
+        sta     $C073
+        jsr     $0100
+        lda     #0                      ; is the canary still alive?
+        sta     $C073
+        jsr     $010A                   ; read aux $0200 into A
+        cmp     #$A5
+        bne     @bdone
+        inc     CARDBK
+        lda     CARDBK
+        cmp     #128
+        bcc     @bank
+@bdone: lda     #0
+        sta     $C073
+
         lda     #<BANNER
         sta     TMP2
         lda     #>BANNER
@@ -104,6 +138,19 @@ ColdStart:
 
 ; ---------------------------------------------------------------------------
         .segment "RODATA"
+
+; The stack-page accessors the bank probe copies to $0100: write A to
+; auxiliary $0200, and read it back.  Ten bytes each, position-fixed.
+AUXPROBE:
+        sta     $C005                   ; $0100: writes go aux
+        sta     $0200
+        sta     $C004
+        rts                             ; ten bytes exactly: next is $010A
+        sta     $C003                   ; $010A: reads come from aux
+        lda     $0200
+        sta     $C002
+        rts
+AUXPROBE_LEN = * - AUXPROBE
 
 ; The system's own banner is printed from Forth once the dictionary is up.
 ; This is only what the kernel says while it is still building it.

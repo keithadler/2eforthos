@@ -44,6 +44,8 @@ TESTS = {
 "boot": """
     files 0
     depth 0
+    type $1EAD C@ 0>
+    stack -1
 """,
 
 "arith": """
