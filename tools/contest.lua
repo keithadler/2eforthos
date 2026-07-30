@@ -18,6 +18,9 @@
 --   nonzero ADDR N    assert N bytes from ADDR are not all zero
 --   screen            print the 80-column text screen, to see what it said
 --   pcs N             sample the PC and IP for N frames, print the hot pages
+--   drive N           type "N DRIVE" -- the Programs disk is 2
+--   filesabs N        assert the absolute file count (for INIT'd disks)
+--   rebase            re-anchor the files op's baseline to the current drive
 
 local LATESTV = tonumber(os.getenv("LATESTV") or "0")
 local READY   = tonumber(os.getenv("READYMAX") or "5400")
@@ -57,6 +60,23 @@ end
 
 local mem, frames, phase = nil, 0, "wait"
 local pcframes, pchist = 0, nil
+-- A line typed while Forth is busy loses keystrokes: the Apple II keyboard
+-- is one byte with no buffer, and a new key lands on top of the old one.
+-- Every mangled line this suite has ever produced was this.  So nothing is
+-- posted until the program counter has been seen inside ReadLine -- the
+-- console's own wait-for-a-line loop -- twice in a row.  The patience
+-- counter posts anyway after thirty seconds, so a step that types at
+-- something other than the prompt still can.
+local pendtext, pendok, pendwait = nil, 0, 0
+
+local function post(text)
+    pendtext, pendok, pendwait = text, 0, 1800
+end
+
+local function atprompt()
+    local pc = manager.machine.devices[":maincpu"].state["PC"].value
+    return pc >= SYMS.ReadLine and pc < SYMS.ReadLine + 0x60
+end
 local basefiles = nil    -- how many files the disk booted with
 local steps, at, timer = {}, 1, 0
 local posting = false                   -- a line is still being typed in
@@ -166,16 +186,14 @@ end
 local function run(step)
     local op, rest = step:match("^(%S+)%s*(.*)$")
     if op == "type" then
-        -- post() types a character at a time over many frames.  Guessing how
-        -- long that takes put every assertion a line behind; MAME will say.
-        manager.machine.natkeyboard:post(rest .. "\n")
-        posting = true
+        -- natkeyboard types a character at a time over many frames; the
+        -- posting flag waits that out, and post() waits for the prompt.
+        post(rest .. "\n")
         timer = 5
     elseif op == "clear" then
         -- ABORT empties the data stack, so a test never inherits a depth
         -- from the step before it.
-        manager.machine.natkeyboard:post("ABORT\n")
-        posting = true
+        post("ABORT\n")
         timer = 5
     elseif op == "load" or op == "loadwith" then
         -- Look the file up in the parsed catalog rather than hard-coding a
@@ -201,8 +219,7 @@ local function run(step)
             report(false, "no file called " .. tostring(want))
             timer = 2
         else
-            manager.machine.natkeyboard:post(found .. " " .. verb .. "\n")
-            posting = true
+            post(found .. " " .. verb .. "\n")
             timer = 5
         end
     elseif op == "point" then
@@ -216,6 +233,16 @@ local function run(step)
         wantbtn = 1; timer = 30
     elseif op == "release" then
         wantbtn = 0; timer = 30
+    elseif op == "filesabs" then
+        -- The absolute count, for the tests that INIT a disk: an empty
+        -- catalog is 0 files whatever the disk booted with, and a delta
+        -- against the boot count broke the day files moved between disks.
+        local a = varaddr("NFILE")
+        local got = a and signed(w(a))
+        report(got == tonumber(rest),
+               string.format("files = %s (wanted %s, absolute)",
+                             tostring(got), rest))
+        timer = 2
     elseif op == "files" then
         -- Against the count the disk booted with, never an absolute number:
         -- adding or editing any file on the floppy would otherwise break
@@ -230,6 +257,20 @@ local function run(step)
         timer = 2
     elseif op == "wait" then
         timer = tonumber(rest)
+    elseif op == "drive" then
+        -- Switch drives the way a user would: type "N DRIVE" and let the
+        -- catalog reload.  The load/loadwith steps read the parsed catalog
+        -- live, so after this they mean the new disk.
+        post(rest .. " DRIVE\n")
+        timer = 5
+    elseif op == "rebase" then
+        -- Re-anchor the files op's baseline to the current drive's count.
+        -- The boot baseline is drive 1's; a test that switches to drive 2
+        -- and then writes needs its arithmetic against drive 2.
+        local nf = varaddr("NFILE")
+        basefiles = nf and w(nf) or 0
+        print(string.format("     files rebased to %d", basefiles))
+        timer = 2
     elseif op == "pcs" then
         -- Sample the program counter for N frames and print the histogram
         -- by page: where the machine actually spends its time, for when a
@@ -357,6 +398,16 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
     if fy then fy:set_value(wanty) end
     if btn then btn:set_value(wantbtn) end
     if timer > 0 then timer = timer - 1 return end
+    if pendtext then
+        pendwait = pendwait - 1
+        if atprompt() then pendok = pendok + 1 else pendok = 0 end
+        if pendok >= 2 or pendwait <= 0 then
+            manager.machine.natkeyboard:post(pendtext)
+            pendtext = nil
+            posting = true
+        end
+        return
+    end
     if posting then
         if manager.machine.natkeyboard.is_posting then return end
         posting = false

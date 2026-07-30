@@ -1,8 +1,14 @@
 # The demos
 
-Six programs on the disk, in Forth, each small enough to fit in the
-dictionary the system leaves free. `CAT` lists them with the number `LOAD`
-wants:
+Every example lives on the **Programs disk in drive 2** — the system disk
+in drive 1 carries the OS and its documentation, and nearly the whole of
+drive 2 is free for what you build. So the first command is:
+
+```
+2 DRIVE
+```
+
+after which `CAT` lists the programs with the number `LOAD` wants:
 
 ![the catalog](images/console-cat.png)
 
@@ -27,6 +33,59 @@ work on top of it, though `FORGET` between demos is still tidier.
 demos define words and print an instruction rather than drawing something
 immediately: turning the screen on while the file is still being read would
 overwrite what was left of it.
+
+---
+
+## Tools on the system disk
+
+Drive 1 carries two loadable tools alongside the OS. `CAT` on drive 1
+shows them:
+
+- **MORE.FTH** — `n MORE` pages through any text file twenty-two lines at
+  a time; any key turns the page, `Q` stops. `HELPTEXT` and your own
+  saved programs are exactly the files it is for.
+- **MENU.FTH** — `MENU` switches to the Programs disk, lists it, and asks
+  which number to load: the whole of `2 DRIVE CAT n LOAD` folded into a
+  question.
+
+---
+
+## LANDER
+
+`examples/LANDER.FTH` — `CAT` for its number, then `n LOAD`, then `LANDER`.
+
+![lunar lander](images/game-lander.png)
+
+Lunar lander on the hi-res screen: a jagged moon with one flat pad, a
+ship drawn in XOR so it flies over the terrain without eating it, and
+fixed-point physics in 64ths of a pixel so gravity can be gentler than
+one pixel per frame. `A` or the game button burns, `Z` and `X` steer.
+Put it down on the pad with the vertical speed low, or add a crater.
+
+Every piece has a name — `PHYS` is one step of physics, `GROUND` the
+terrain under the ship, `DOWN?` the touchdown test — which is how the
+test suite plays it without hands.
+
+## BREAKOUT
+
+![breakout](images/game-breakout.png)
+
+`examples/BREAKOUT.FTH` — the game Woz built the hardware for, so it
+had to be here. Fourteen columns and six rows of bricks, the paddle
+knob for the bat, angles picked by which third of the bat the ball
+hits. The ball is a small XOR block: flying over the score does not
+eat the digits.
+
+## HAT
+
+![the hat](images/game-hat.png)
+
+`examples/HAT.FTH` — the sine-ripple surface every Apple II drew
+sooner or later, in three-quarter view with hidden lines removed one
+byte per column. The arithmetic is Applesoft's own five-byte floating
+point called in the ROM — exactly what drew it in 1978, with different
+words in front of it. `HAT` takes about two minutes, and it took
+longer in BASIC.
 
 ---
 

@@ -139,11 +139,13 @@ VARIABLE FX1 VARIABLE FX2 VARIABLE FY1 VARIABLE FY2
 \ after sixteen writes (INIT reloading the catalog it just wrote) failed
 \ all four instant tries and worked seconds later.  A pause between tries
 \ is what DOS did too: RWTS retried forty-eight times with recalibration
-\ between groups.  Eight tries a tenth of a second apart outwaits anything
-\ observed, and costs nothing on the reads that succeed first time.
+\ between groups.  Sixteen tries a quarter second apart outwaits anything
+\ observed -- the worst was the catalog read after a sixty-five sector
+\ picture, still failing at eight -- and costs nothing on the reads that
+\ succeed first time.
 VARIABLE DERR VARIABLE RDT VARIABLE RDS VARIABLE RDA
 VARIABLE WROTE
-8 CONSTANT DTRIES
+16 CONSTANT DTRIES
 : DPAUSE 5000 0 DO LOOP ;               \ about a quarter of a second
 \ What was measured, not deduced: a read shortly after a write cannot be
 \ trusted.  Some fail, and the retry catches those; some SUCCEED WITH THE
@@ -213,6 +215,37 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 : FREE 17 0 SECBUF RD 0= IF DISKERR 0 EXIT THEN 0
   35 0 DO SECBUF 56 + I 4 * +
     DUP C@ BITS SWAP 1+ C@ BITS + + LOOP ;
+
+\ Two drives.  Drive 1 is the system's own disk; drive 2 is the Programs
+\ disk, all free space and no kernel underneath it -- where anything big
+\ belongs.  Switching selects the drive and reloads the catalog, so CAT,
+\ LOAD and the file commands all mean the new disk from here on.  DRV
+\ remembers which, for the words that treat the boot disk specially.
+VARIABLE DRV  1 DRV !
+: DRIVE ( n -- )
+  DUP 1 < OVER 2 > OR IF DROP ." 1 OR 2" CR EXIT THEN
+  DUP DRV ! DRVSEL
+  CATLOAD FREE NFREE !
+  ." DRIVE " DRV @ . NFILE @ . ." FILES " NFREE @ . ." FREE" CR ;
+
+\ Find a file by name rather than number: -1 when it is not there.  The
+\ names in the catalog are high-bit text padded with blanks to thirty
+\ characters, so the comparison strips both.
+VARIABLE FFA VARIABLE FFL VARIABLE FFI
+: FNCH ( i -- c )  FFI @ CATENT 6 + + C@ 127 AND ;
+: FNAME? ( -- f )                       \ entry FFI bears the name FFA/FFL?
+  FFL @ 30 > IF 0 EXIT THEN
+  FFL @ 0 ?DO
+    FFA @ I + C@ I FNCH <> IF 0 UNLOOP EXIT THEN
+  LOOP
+  30 FFL @ ?DO
+    I FNCH 32 <> IF 0 UNLOOP EXIT THEN
+  LOOP -1 ;
+: FINDF ( addr len -- n )
+  FFL ! FFA !
+  NFILE @ 0 ?DO
+    I FFI ! FNAME? IF I UNLOOP EXIT THEN
+  LOOP -1 ;
 
 : FTYPE 127 AND
   DUP 4 = IF DROP 66 EXIT THEN
@@ -565,7 +598,9 @@ VARIABLE IVT
   35 VTOCBUF $34 + C!  16 VTOCBUF $35 + C!
   0 VTOCBUF $36 + C!  1 VTOCBUF $37 + C!
   35 0 DO I IBITS LOOP
-  SRCEND 1+ 0 DO I IUSED LOOP           \ the kernel and the source it streams
+  \ the kernel and its source live only on the disk the machine boots
+  \ from; formatting the Programs disk gives those thirteen tracks back
+  DRV @ 1 = IF SRCEND 1+ 0 DO I IUSED LOOP THEN
   17 IUSED
   17 0 VTOCBUF WR 0= IF DISKERR EXIT THEN
   15 0 DO
@@ -818,30 +853,45 @@ $4000 CONSTANT PICLEN
   AUXBANK   HERE 8192 + $2000 8192 MOVE
   MAINBANK ;
 
+\ --- help -------------------------------------------------------------------
+\ HELP alone prints the summary below.  HELP NAME looks NAME up in the
+\ HELPTEXT file on the system disk: an entry is a line beginning with the
+\ word itself, and every indented line after it belongs to the entry.  The
+\ file is data, not code, so adding an entry costs no dictionary at all.
+VARIABLE HWA VARIABLE HWL VARIABLE HON VARIABLE HHIT
+: HTOK? ( addr len -- f )               \ line's first token = the word?
+  DUP HWL @ < IF 2DROP 0 EXIT THEN
+  OVER HWL @ + C@ 32 <> OVER HWL @ <> AND IF 2DROP 0 EXIT THEN
+  DROP
+  HWL @ 0 ?DO
+    DUP I + C@ HWA @ I + C@ <> IF DROP 0 UNLOOP EXIT THEN
+  LOOP DROP -1 ;
+: HLINE? ( addr len -- )                \ one line of the file, maybe printed
+  DUP 0= IF 2DROP 0 HON ! EXIT THEN
+  OVER C@ 32 = IF
+    HON @ IF TYPE CR ELSE 2DROP THEN EXIT THEN
+  2DUP HTOK? DUP HON ! IF -1 HHIT ! TYPE CR ELSE 2DROP THEN ;
+: HELPW ( addr len -- )
+  HWL ! HWA !
+  S" HELPTEXT" FINDF DUP 0< IF
+    DROP ." HELPTEXT IS ON THE SYSTEM DISK -- 1 DRIVE FIRST" CR EXIT THEN
+  FOPEN 0= IF ." CANNOT OPEN HELPTEXT" CR EXIT THEN
+  0 HON ! 0 HHIT !
+  BEGIN
+    PAD 79 DFGETS >R              ( got ) ( r: eof )
+    PAD SWAP HLINE?
+    \ once the entry has been printed and has ended, the rest of the file
+    \ has nothing more to say -- and it is a long file
+    HHIT @ HON @ 0= AND IF R> DROP FCLOSE EXIT THEN
+  R> UNTIL FCLOSE
+  HHIT @ 0= IF ." NO ENTRY FOR THAT.  PLAIN HELP LISTS THE BASICS." CR THEN ;
+
 \ --- the greeting ----------------------------------------------------------
+\ The summary plain HELP prints is itself an entry in HELPTEXT -- the one
+\ named HELP -- so a screen and a half of text costs the language card
+\ nothing.  It used to be ." strings compiled here, and the card was full.
 : HELP
-  ." CAT              LIST THE DISK" CR
-  ." n LOCK           LOCK OR UNLOCK A FILE" CR
-  ." n DEL   n REN    DELETE OR RENAME ONE" CR
-  ." n LOAD           INTERPRET A TEXT FILE AS FORTH" CR
-  ." MARK  UNMARK     BRACKET WORK YOU MEAN TO THROW AWAY" CR
-  ." SAVEDICT         WRITE IT AS AN OVERLAY, n LOADDICT READS IT BACK" CR
-  ." addr len SAVE    WRITE A TEXT FILE, ASKING FOR THE NAME" CR
-  ." addr len BSAVE   THE SAME AS A BINARY FILE" CR
-  ." n addr BLOAD     READ ONE BACK, RETURNING ITS LENGTH" CR
-  ." WORDS            EVERY DEFINITION IN THE DICTIONARY" CR
-  ." HGR   TEXT       GRAPHICS SCREEN ON, AND BACK TO HERE" CR
-  ." n HCOLOR         0 BLACK 1 GREY 2 GREY 3 WHITE" CR
-  ." flag HXOR        DRAW BY XOR, SO DRAWING TWICE ERASES" CR
-  ." x y HPLOT        x1 x2 y HLINE        x1 y1 x2 y2 HLINE2" CR
-  ." x y r HCIRCLE    x y r HDISC          HCLS" CR
-  ." x y HFILL        FLOOD THE REGION AROUND A POINT" CR
-  ." a w h x y BLIT   DRAW A BITMAP, 8 PIXELS PER BYTE" CR
-  ." x1 x2 y1 y2 HBOX AND HFRAME" CR
-  ." col row TAT      T. TEXT ON THE GRAPHICS SCREEN, flag TINV" CR
-  ." KEY? KEYC BTN    n PADDLE" CR
-  ." CLICK  p n TONE  n MS  VBL" CR
-  ." t s addr DREAD   t s addr DWRITE      RAW SECTORS" CR ;
+  PARSE-NAME DUP 0= IF 2DROP S" HELP" THEN HELPW ;
 \ ." compiles an inline string, so it only says anything from inside a
 \ definition; at the top level it would build one nobody runs.
 : GREET PAGE
@@ -850,5 +900,6 @@ $4000 CONSTANT PICLEN
   ." (C) 2026 KEITH ADLER" CR CR
   CATLOAD FREE NFREE !
   NFILE @ . ." FILES, " NFREE @ . ." SECTORS FREE." CR
-  ." TYPE HELP FOR A SUMMARY." CR ;
+  ." PROGRAMS ARE IN DRIVE 2: TYPE 2 DRIVE THEN CAT." CR
+  ." TYPE HELP FOR A SUMMARY, OR HELP HGR FOR ONE WORD." CR ;
 GREET

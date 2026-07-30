@@ -37,6 +37,7 @@ D2PH0ON  = D2BASE+1
 D2MOTOFF = D2BASE+8
 D2MOTON  = D2BASE+9
 D2DRV1   = D2BASE+10
+D2DRV2   = D2BASE+11
 D2Q6L    = D2BASE+12            ; read a disk byte here
 D2Q6H    = D2BASE+13
 D2Q7L    = D2BASE+14            ; read mode
@@ -54,8 +55,14 @@ D2Q7H    = D2BASE+15            ; write mode
 ; loader reads seventy-four of them back to back.  Fifty milliseconds of it
 ; was longer than the gap to the next sector, so every read missed and cost a
 ; whole revolution instead.
+; The controller routes one motor line to whichever drive the select latch
+; names, so the drive is chosen here, on the way into every operation.
+; D2DRVN is 0 for drive 1 and 1 for drive 2; DRVSEL clears D2MOTRUN and
+; D2READY when it changes, because the other drive's platter is not
+; spinning and its head is wherever it was left.
 D2MotorOn:
-        lda     D2DRV1
+        ldy     D2DRVN
+        lda     D2DRV1,y
         lda     D2MOTON
         lda     D2MOTRUN
         bne     @running
@@ -749,22 +756,10 @@ D2NIBENC:
 
 ; ---------------------------------------------------------------------------
         .segment "DATA"
-D2TRK:   .byte  0
-D2SEC:   .byte  0
-D2CURH:  .byte  0                       ; head position, in half tracks
-D2DSTH:  .byte  0                       ; where it is going
-D2GOTTRK:.byte  0                       ; where the disk says it is
+; The driver's scratch is above the catalog (kernel.inc); only the three
+; bytes whose boot value matters are carried in the image.
 D2READY: .byte  0                       ; has the head been recalibrated?
 D2MOTRUN:.byte  0
-D2BUDGET:.word  0
-D2CNT:   .byte  0
-D2DLY:   .byte  0
-D2PHIDX: .byte  0
-D2CHK:   .byte  0
-D2T44:   .byte  0
-D2TMP:   .byte  0
-D2IDX:   .byte  0
-D2VOL:   .byte  0
-D2NIBC:  .byte  0                       ; the trailing checksum byte
+D2DRVN:  .byte  0                       ; 0 = drive 1, 1 = drive 2
 ; D2NIBDEC is above the catalog with the other cold-start buffers: kernel.inc
         .segment "CODE"

@@ -34,6 +34,26 @@ D2NIBA  = $1100
 D2NIBDEC = $1200                ; the kernel keeps its own copy elsewhere;
                                 ; all three are scratch the kernel reuses
 
+; The driver's working bytes, at this loader's own addresses.  The kernel
+; houses the same names above the catalog (kernel.inc); here they live in
+; the page after the decode table, and the kernel reuses all of it once
+; it is up.  Same driver, two universes, no bytes carried in either image.
+D2TRK    = $1300
+D2SEC    = $1301
+D2CURH   = $1302
+D2DSTH   = $1303
+D2GOTTRK = $1304
+D2BUDGET = $1305                ; 2
+D2CNT    = $1307
+D2DLY    = $1308
+D2PHIDX  = $1309
+D2CHK    = $130A
+D2T44    = $130B
+D2TMP    = $130C
+D2IDX    = $130D
+D2VOL    = $130E
+D2NIBC   = $130F
+
 ; The driver expects these in zero page.  The kernel gets them from zp.inc;
 ; here they are declared directly, since none of the rest of that map applies.
 XSAV    = $F8

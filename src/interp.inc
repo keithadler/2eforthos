@@ -170,20 +170,6 @@ CommaCodeField:
 ; Input
 ; ---------------------------------------------------------------------------
 
-; The last track the boot source lands on, for anything that has to leave it
-; alone.  A number rather than a constant in Forth because only the build
-; knows it: the source grows every time a word is added to system.fth, and
-; INIT marking a fixed eleven tracks used is how a freshly formatted disk
-; came to put files on top of the source and stop booting.
-        prim    "SRCEND", W_SRCEND, 0   ; -- t
-        dex
-        dex
-        lda     #SRCTRACK + (SRCSECS - 1) / 16
-        sta     0,x
-        lda     #0
-        sta     1,x
-        NEXT
-
 ; Read the next sector of the system's own source into SRCBUF and point SRC
 ; at it.  Carry set means there are none left.
 ;
@@ -302,6 +288,29 @@ Refill:
         bne     @strip
 @nostrip:
         rts
+
+; PARSE-NAME -- the interpreter's own word parser, handed to Forth.  A word
+; that wants an argument from the line it was typed on -- HELP HGR, say --
+; parses it with this; length zero means the line had nothing more to give.
+; The text is in the input buffer and lasts only until the next line is
+; read, so it is for looking at, not for keeping.
+        prim    "PARSE-NAME", W_PARSENAME, 0    ; -- addr len
+        stx     XSAV
+        jsr     ParseWord
+        ldx     XSAV
+        dex
+        dex
+        lda     TMP1
+        sta     0,x
+        lda     TMP1+1
+        sta     1,x
+        dex
+        dex
+        lda     WORDLEN
+        sta     0,x
+        lda     #0
+        sta     1,x
+        NEXT
 
 ; Parse the next blank-delimited word.  TMP1 := address, WORDLEN := A := length
 ; (zero once the line is used up).

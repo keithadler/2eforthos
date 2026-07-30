@@ -26,6 +26,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DISK = ROOT / "build" / "run.dsk"
+PDISK = ROOT / "build" / "run2.dsk"
 LBL  = ROOT / "build" / "forth.lbl"
 ZP   = ROOT / "src" / "zp.inc"
 
@@ -413,6 +414,8 @@ TESTS = {
 # CREATE ... DOES> array, all of which have to survive being read off a
 # floppy a sector at a time.
 "load": """
+    drive 2
+    wait 600
     load TEST.FTH
     wait 600
     clear
@@ -612,6 +615,8 @@ TESTS = {
 # Each demo has to load inside the dictionary that is left and run without
 # leaving anything on the stack.  They are listed here in catalog order.
 "demo-gfx": """
+    drive 2
+    wait 600
     load GFX.FTH
     wait 1200
     clear
@@ -623,6 +628,8 @@ TESTS = {
 """,
 
 "demo-moire": """
+    drive 2
+    wait 600
     load MOIRE.FTH
     wait 1200
     clear
@@ -637,6 +644,8 @@ TESTS = {
 """,
 
 "demo-bounce": """
+    drive 2
+    wait 600
     load BOUNCE.FTH
     wait 1200
     clear
@@ -650,6 +659,8 @@ TESTS = {
 """,
 
 "demo-primes": """
+    drive 2
+    wait 600
     load PRIMES.FTH
     wait 1200
     clear
@@ -668,6 +679,8 @@ TESTS = {
 """,
 
 "demo-lang": """
+    drive 2
+    wait 600
     load LANG.FTH
     wait 1200
     clear
@@ -680,6 +693,8 @@ TESTS = {
 """,
 
 "demo-sound": """
+    drive 2
+    wait 600
     load SOUND.FTH
     wait 1200
     clear
@@ -693,6 +708,8 @@ TESTS = {
 # Both comment forms have to survive being read off the disk, including one
 # that runs to the end of a line of code.
 "comments": """
+    drive 2
+    wait 600
     load COMMENTS.FTH
     wait 1200
     clear
@@ -799,6 +816,8 @@ TESTS = {
 # POINTER.FTH -- one test per word.  The game port is driven from the
 # harness, so PTR-XY and the event queue can be exercised for real.
 "ptr-sources": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -820,6 +839,8 @@ TESTS = {
 """,
 
 "ptr-position": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -841,6 +862,8 @@ TESTS = {
 """,
 
 "ptr-coords": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -864,6 +887,8 @@ TESTS = {
 """,
 
 "ptr-events": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -887,6 +912,8 @@ TESTS = {
 """,
 
 "ptr-hotspots": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -913,6 +940,8 @@ TESTS = {
 
 # The button, and the events it generates, driven through the game port.
 "ptr-button": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -934,6 +963,8 @@ TESTS = {
 
 # EV-GEN turns a change in the pointer into a queued event.
 "ptr-event-gen": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -1058,6 +1089,155 @@ TESTS = {
     clear
     type STATE @ DP @ HERE =
     stack -1 0
+""",
+
+# Lunar lander: the physics stepped by hand, with the knowns asserted --
+# three steps of gravity, one step of burn, the ground under a spot, and
+# the touchdown test both ways.  LANDER itself is interactive and is not
+# run here; every piece it is made of is.
+"lander": """
+    wait 300
+    drive 2
+    wait 600
+    type 1 RND-SEED!
+    load LANDER.FTH
+    wait 3000
+    clear
+    type MAKE-MOON PAD# @ 2 > PAD# @ 33 < AND
+    stack -1
+    clear
+    type 0 VY ! 0 THR ! 0 SIDE ! 900 FUEL ! PHYS PHYS PHYS VY @
+    stack 6
+    clear
+    type 1 THR ! PHYS VY @
+    stack 2
+    clear
+    type 100 64 * SX ! 180 64 * SY ! PY DOWN?
+    stack -1 180
+    clear
+    type 20 64 * SY ! DOWN?
+    stack 0
+    clear
+    type 520 64 * SX ! PX
+    stack 520
+""",
+
+# Breakout: build the wall, knock a brick out of it, bounce off a side
+# wall, and check the bat answers the paddle.  The paddle idles at 128,
+# which is the middle of the travel, so the bat should sit mid-screen.
+"breakout": """
+    wait 300
+    drive 2
+    wait 600
+    type 1 RND-SEED!
+    load BREAKOUT.FTH
+    wait 3000
+    clear
+    type HGR 3 HCOLOR -1 HXOR 0 SCORE ! WALL NLEFT @
+    wait 2400
+    stack 84
+    clear
+    type 1 0 BRICK C@  50 20 HPOINT
+    stack -1 1
+    clear
+    type 100 X ! 20 Y ! HITS 0<>
+    stack -1
+    clear
+    type HITS KILL NLEFT @ SCORE @
+    stack 10 83
+    clear
+    type HITS
+    stack 0
+    clear
+    type 1 X ! -3 DX ! 100 Y ! BOUNCE DX @
+    stack 3
+    clear
+    type BAT-AT 240 > BAT-AT 260 < AND
+    stack -1
+    type TEXT
+""",
+
+# The hat: the altitude function at its calm centre and on a slope, and
+# one full row through the middle, which must land a pixel dead centre.
+# The whole HAT takes two minutes and is for looking at, not asserting.
+"hat": """
+    wait 300
+    drive 2
+    wait 600
+    load HAT.FTH
+    wait 2400
+    clear
+    type 0 0 ALT
+    stack 30
+    clear
+    type 30 0 ALT DUP -31 > SWAP 31 < AND
+    stack -1
+    clear
+    type HGR HCLS 3 HCOLOR HCLR 0 HATROW
+    wait 2400
+    type 280 80 HPOINT
+    stack -1
+    type TEXT
+""",
+
+# MORE pages a file; a short file ends without paging, which is the part
+# a test can hold still.  MKEY and the Q exit need a hand on the keyboard.
+"more": """
+    wait 300
+    loadwith MORE.FTH LOAD
+    wait 1500
+    clear
+    loadwith KEYS MORE
+    wait 1500
+    depth 0
+    type 999 MORE
+    wait 600
+    depth 0
+""",
+
+# MENU folds 2 DRIVE CAT n LOAD into a question.  Answering with a number
+# past the catalog exercises the whole path without depending on which
+# file is which number; MNUM is asserted directly both ways.
+"menu": """
+    wait 300
+    loadwith MENU.FTH LOAD
+    wait 1500
+    clear
+    type S" 123" MNUM
+    stack -1 123
+    clear
+    type S" 12X" MNUM NIP
+    stack 0
+    clear
+    type S" " DROP 0 MNUM NIP
+    stack 0
+    clear
+    type MENU
+    wait 900
+    type 99
+    wait 900
+    depth 0
+""",
+
+# HELP with a name reads the entry out of HELPTEXT on the system disk;
+# plain HELP is the entry named HELP.  A word with no entry says so.
+"help": """
+    wait 300
+    type HELP HGR
+    wait 2400
+    depth 0
+    type HELP XYZZY
+    wait 3600
+    depth 0
+    clear
+    type S" HELPTEXT" FINDF 0 <
+    stack 0
+    clear
+    type S" NOSUCH.XYZ" FINDF
+    stack -1
+    clear
+    type PARSE-NAME FOO NIP
+    stack 3
 """,
 
 # The DREAD comes with the head deliberately left BETWEEN tracks by DHALF,
@@ -1192,6 +1372,8 @@ TESTS = {
 """,
 
 "shot-moire": """
+    drive 2
+    wait 600
     load MOIRE.FTH
     wait 2400
     clear
@@ -1201,6 +1383,8 @@ TESTS = {
 """,
 
 "shot-float": """
+    drive 2
+    wait 600
     load FLOAT.FTH
     wait 2400
     clear
@@ -1214,6 +1398,8 @@ TESTS = {
 """,
 
 "shot-chart": """
+    drive 2
+    wait 600
     load CHART.FTH
     wait 2400
     clear
@@ -1223,6 +1409,8 @@ TESTS = {
 """,
 
 "shot-arc": """
+    drive 2
+    wait 600
     load GFXLIB.FTH
     wait 2400
     clear
@@ -1252,6 +1440,8 @@ TESTS = {
 # Not assertions: each loads an example, runs it, and snapshots what it put
 # on the screen.  Run one at a time and copy shots/apple2ee/0000.png.
 "shot-stack": """
+    drive 2
+    wait 600
     load STACK.FTH
     wait 2400
     clear
@@ -1261,6 +1451,8 @@ TESTS = {
 """,
 
 "shot-conds": """
+    drive 2
+    wait 600
     load CONDS.FTH
     wait 2400
     clear
@@ -1272,6 +1464,8 @@ TESTS = {
 """,
 
 "shot-defining": """
+    drive 2
+    wait 600
     load DEFINING.FTH
     wait 2400
     clear
@@ -1282,6 +1476,8 @@ TESTS = {
 """,
 
 "shot-sound": """
+    drive 2
+    wait 600
     load SOUND.FTH
     wait 2400
     clear
@@ -1293,6 +1489,8 @@ TESTS = {
 """,
 
 "shot-diskio": """
+    drive 2
+    wait 600
     load DISKIO.FTH
     wait 2400
     clear
@@ -1302,6 +1500,8 @@ TESTS = {
 """,
 
 "shot-paddle": """
+    drive 2
+    wait 600
     load PADDLE.FTH
     wait 2400
     clear
@@ -1312,6 +1512,8 @@ TESTS = {
 """,
 
 "shot-pointer": """
+    drive 2
+    wait 600
     load POINTER.FTH
     wait 2400
     clear
@@ -1459,13 +1661,13 @@ TESTS = {
     wait 300
     type INIT
     wait 1500
-    files -28
+    filesabs 0
     type HGR HCLS 3 HCOLOR 100 40 HPLOT 200 96 50 HCIRCLE
     wait 600
     type PICSAVE
     type PIC
-    wait 3000
-    files -27
+    wait 4200
+    filesabs 1
     type HCLS
     wait 600
     type 100 40 HPOINT 200 146 HPOINT
@@ -1482,7 +1684,56 @@ TESTS = {
     depth 0
 """,
 
+# Portraits of the games, for docs/images and the README.
+"shot-lander": """
+    wait 300
+    drive 2
+    wait 600
+    type 1 RND-SEED!
+    load LANDER.FTH
+    wait 3000
+    clear
+    type START 1 FLAME ! SHIP HUD
+    wait 600
+    shot
+    type TEXT
+""",
+
+"shot-breakout": """
+    wait 300
+    drive 2
+    wait 600
+    type 1 RND-SEED!
+    load BREAKOUT.FTH
+    wait 3000
+    clear
+    type HGR 3 HCOLOR -1 HXOR 0 SCORE ! 3 BALLS ! WALL
+    wait 2400
+    type BAT-AT DUP DRAW-BAT OLDBAT ! BATX !
+    type 260 X ! 150 Y ! BALL 40 SCORE ! SHOW
+    wait 600
+    shot
+    type TEXT
+""",
+
+# The full hat, which is the point.  Two emulated minutes of ROM
+# floating point; the PAUSE at the end holds the picture for the shot.
+"shot-hat": """
+    wait 300
+    drive 2
+    wait 600
+    load HAT.FTH
+    wait 2400
+    clear
+    type HAT
+    wait 11400
+    shot
+    type Q
+""",
+
 "gfxlib": """
+    drive 2
+    wait 600
     load GFXLIB.FTH
     wait 2400
     clear
@@ -1620,6 +1871,8 @@ TESTS = {
 # Reading a file a byte at a time, without swallowing it whole.  TEST.FTH
 # starts with a backslash comment, stored high-bit set the way DOS does.
 "file-read": """
+    drive 2
+    wait 600
     loadwith TEST.FTH FOPEN
     wait 1200
     stack -1
@@ -1679,6 +1932,8 @@ TESTS = {
 # A line at a time, which is what interchanging a text file with anything
 # else needs.  TEST.FTH's first line is a backslash comment.
 "file-lines": """
+    drive 2
+    wait 600
     loadwith TEST.FTH FOPEN
     wait 1200
     clear
@@ -1812,6 +2067,8 @@ TESTS = {
 """,
 
 "finance": """
+    drive 2
+    wait 600
     load FINANCE.FTH
     wait 2400
     clear
@@ -1890,6 +2147,8 @@ TESTS = {
 # An arc, now that FSIN and FCOS exist.  At zero degrees the point is due
 # right of the centre; at ninety it is directly below, y growing downward.
 "arc": """
+    drive 2
+    wait 600
     load GFXLIB.FTH
     wait 2400
     clear
@@ -1910,6 +2169,8 @@ TESTS = {
 """,
 
 "eg-float": """
+    drive 2
+    wait 600
     load FLOAT.FTH
     wait 2400
     clear
@@ -1931,6 +2192,8 @@ TESTS = {
 """,
 
 "eg-chart": """
+    drive 2
+    wait 600
     load CHART.FTH
     wait 2400
     clear
@@ -1950,6 +2213,9 @@ TESTS = {
 # host.  Type lines in, list them, edit one, write it out, load it back --
 # which is the whole loop this system did not have.
 "editor": """
+    drive 2
+    wait 600
+    rebase
     load EDIT.FTH
     wait 3000
     clear
@@ -2021,7 +2287,7 @@ TESTS = {
     wait 1800
     type CATLOAD
     wait 900
-    files -28
+    filesabs 0
     clear
     type FREE
     stack 336
@@ -2037,6 +2303,7 @@ def run(name, script, keep_shots=False):
     if not keep_shots:
         subprocess.run(["rm", "-rf", str(shots)], check=False)
     subprocess.run(["cp", str(ROOT / "build" / "forth.dsk"), str(DISK)], check=True)
+    subprocess.run(["cp", str(ROOT / "build" / "programs.dsk"), str(PDISK)], check=True)
 
     syms = {}
     for line in LBL.read_text().splitlines():
@@ -2051,7 +2318,7 @@ def run(name, script, keep_shots=False):
         m = re.match(r"(\w+)\s*=\s*\$([0-9A-Fa-f]+)", line.strip())
         if m:
             syms.setdefault(m.group(1), int(m.group(2), 16))
-    wanted = ("XSAV", "DSTACK_TOP", "DSTACK_BOT")
+    wanted = ("XSAV", "DSTACK_TOP", "DSTACK_BOT", "ReadLine")
     missing = [n for n in wanted if n not in syms]
     if missing:
         sys.exit(f"cannot find {', '.join(missing)}")
@@ -2065,7 +2332,7 @@ def run(name, script, keep_shots=False):
     cmd = [
         "mame", "apple2ee", "-rompath", str(ROOT / "roms"), "-sl4", "",
         "-gameio", "joy", "-cfg_directory", str(ROOT / "cfg"),
-        "-flop1", str(DISK), "-skip_gameinfo",
+        "-flop1", str(DISK), "-flop2", str(PDISK), "-skip_gameinfo",
         # No window and no sound: the tests read memory, not the screen, and
         # a window stealing focus every forty seconds makes the machine
         # unusable while a suite runs.
@@ -2102,7 +2369,10 @@ def main(argv):
     if "--list" in argv:
         print("\n".join(TESTS))
         return 0
-    names = [a for a in argv[1:] if not a.startswith("-")] or list(TESTS)
+    # shot-* cases are for regenerating the documentation images, not for
+    # asserting -- a full run skips them, exactly as the docstring says.
+    names = ([a for a in argv[1:] if not a.startswith("-")]
+             or [n for n in TESTS if not n.startswith("shot-")])
     total_p = total_f = 0
     # Which cases failed, not just how many assertions did.  A full run is
     # thousands of lines and the count at the bottom does not say where to

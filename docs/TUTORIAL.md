@@ -4,8 +4,10 @@ From the prompt to a program saved on the floppy. If you have never used a
 Forth, read [FORTH.md](FORTH.md) first — it is short, and it explains why
 any of this is shaped the way it is.
 
-Everything below is on the disk as an example file, heavily commented. `CAT`
-lists them and `n LOAD` reads one in.
+Everything below is on the Programs disk in drive 2, as an example file,
+heavily commented. `2 DRIVE` switches to it; then `CAT` lists the files
+and `n LOAD` reads one in. Your own work belongs there too — the system
+disk in drive 1 keeps the OS, its `HELPTEXT`, and not much else.
 
 ---
 
@@ -320,6 +322,7 @@ Everything above put source on the host and rebuilt the disk. There is an
 editor on the floppy, and with it the loop never leaves the //e.
 
 ```
+2 DRIVE          the editor lives on the Programs disk
 CAT              find EDIT.FTH's number
 28 LOAD          load it
 EHELP            the commands

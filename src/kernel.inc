@@ -57,7 +57,37 @@ D2NIBDEC = $1D00                ; 256: 6-and-2 decode, built at cold start.
                                 ; only the encode side is cycle-critical.
 FZSAVE   = $1E00                ; 93: the whole of $50-$AC, around FP calls
 FSTK     = $1E60                ; 45: eight floats and a spare for FSWAP
-                                ; $1E8D-$1FFF spare
+; Scratch bytes, every one written before it is read.  They were .byte 0
+; in the DATA segment, which made each of them cost an image byte and a
+; dictionary byte for no reason.  Only state that must SURVIVE from one
+; use to the next -- D2READY, D2MOTRUN, D2DRVN, HXORF, GCOL, RSEED --
+; stays in the image, because those need their boot value.
+D2TRK    = $1E90                ; the disk driver's working state
+D2SEC    = $1E91
+D2CURH   = $1E92                ; head position; recal writes it first
+D2DSTH   = $1E93
+D2GOTTRK = $1E94
+D2BUDGET = $1E95                ; 2
+D2CNT    = $1E97
+D2DLY    = $1E98
+D2PHIDX  = $1E99
+D2CHK    = $1E9A
+D2T44    = $1E9B
+D2TMP    = $1E9C
+D2IDX    = $1E9D
+D2VOL    = $1E9E
+D2NIBC   = $1E9F
+NBKT     = $1EA0                ; the compiler's
+NEWHDR   = $1EA1                ; 2
+STRLEN   = $1EA3                ; 2
+CFLO     = $1EA5
+CFHI     = $1EA6
+FTMP     = $1EA7                ; 2: the FP words'
+GLX      = $1EA9                ; the lo-res driver's
+GLY      = $1EAA
+GRT      = $1EAB
+GTMP2    = $1EAC
+                                ; $1EAD-$1FFF spare
 
 .macro  NEXT
         jmp     DoNext
