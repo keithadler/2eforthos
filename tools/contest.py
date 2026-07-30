@@ -1286,6 +1286,86 @@ TESTS = {
     stack -1 12
 """,
 
+# ForthPaint: the tools driven by hand -- pen segment, the two-click
+# state machine, and a disc -- with the crosshair loop left out of it.
+"paint": """
+    wait 300
+    type PAINT
+    wait 4200
+    clear
+    type HGR HCLS 3 INK ! 1 TOOL ! 100 CX ! 50 CY ! 90 PX2 ! 50 PY2 !
+    wait 600
+    type PRESS 95 50 HPOINT
+    wait 600
+    stack -1
+    clear
+    type 5 TOOL ! 0 ANCH ! 2CLICK?
+    stack 0
+    clear
+    type 2CLICK? ANCH @
+    stack 0 -1
+    clear
+    type 300 CX ! 100 CY ! 4 TOOL ! 0 ANCH ! PRESS 320 CX ! PRESS
+    wait 900
+    type 310 100 HPOINT
+    wait 300
+    stack -1
+    type TEXT
+""",
+
+# ForthWrite: the wrap machinery -- a word straddling the margin is
+# carried whole onto the next line, and the document flattens for SAVE.
+"forthwrite": """
+    wait 300
+    type WRITE
+    wait 4200
+    clear
+    type 0 WLINES ! WOPEN 72 WPUT 73 WPUT WCOL @
+    stack 2
+    clear
+    type WFLUSH WLINES @ WCOL @
+    stack 0 1
+    clear
+    type 0 WLINES ! WOPEN
+    type : TFILL 0 DO 65 WPUT LOOP 32 WPUT ;
+    type 55 TFILL 87 WPUT 88 WPUT 89 WPUT WCOL @
+    stack 59
+    clear
+    type WWRAP WLINES @ WCOL @
+    stack 3 1
+    clear
+    type WCUR 1+ C@ WCUR 2 + C@ WCUR 3 + C@
+    stack 89 88 87
+""",
+
+# The checkbook: exact cents in doubles, a running balance, and the whole
+# flow arriving by autoload from drive 2 -- LEDGER is typed, not loaded.
+"ledger": """
+    wait 300
+    type LEDGER
+    wait 4200
+    type LEDGER
+    wait 1200
+    type 12 50 IN SALARY
+    wait 900
+    type 3 15 OUT COFFEE
+    wait 900
+    clear
+    type BLO @ BHI @
+    stack 0 935
+    clear
+    type 1250 00 IN PAYDAY BLO @ BHI @
+    wait 900
+    stack 1 -5137
+    clear
+    type LN @
+    stack 3
+    clear
+    type 0 LENT 2@ D. 1 LENT 2@ D.
+    wait 600
+    depth 0
+""",
+
 # HELP with a name reads the entry out of HELPTEXT on the system disk;
 # plain HELP is the entry named HELP.  A word with no entry says so.
 "help": """
@@ -1785,6 +1865,43 @@ TESTS = {
     wait 11400
     shot
     type Q
+""",
+
+"shot-paint": """
+    wait 300
+    type PAINT
+    wait 4200
+    clear
+    type HGR HCLS
+    type 3 INK ! INK! 40 520 20 170 HFRAME
+    type 150 110 42 HDISC  0 HCOLOR 150 110 20 HDISC
+    type 3 HCOLOR 300 150 340 150 HLINE2 340 150 320 60 HLINE2
+    type 320 60 300 150 HLINE2 321 100 HFILL
+    type 430 70 26 HCIRCLE 400 470 120 155 HFRAME
+    wait 1800
+    type 250 CX ! 90 CY ! CROSS
+    wait 600
+    shot
+    type TEXT
+""",
+
+"shot-ledger": """
+    wait 300
+    type LEDGER
+    wait 4200
+    type LEDGER
+    wait 1200
+    type 1250 00 IN SALARY
+    wait 900
+    type 42 50 OUT GROCERIES
+    wait 900
+    type 18 99 OUT RECORDS
+    wait 900
+    type 600 00 IN CONSULTING
+    wait 900
+    type ENTRIES
+    wait 1200
+    shot
 """,
 
 "gfxlib": """

@@ -689,8 +689,12 @@ VARIABLE NFL VARIABLE NFA VARIABLE NFD
   DRV @ NFD !
   NFD @ 1 <> IF 1 DRVSEL CATLOAD THEN
   PAD NFL @ 4 + FINDF
+  \ not a tool on the system disk?  perhaps a program on drive 2 --
+  \ which is where PAINT, WRITE and their kind live, beside the space
+  \ they need
+  DUP 0< IF DROP 2 DRVSEL CATLOAD PAD NFL @ 4 + FINDF THEN
   DUP 0< IF DROP 0 ELSE LOAD -1 THEN
-  NFD @ 1 <> IF NFD @ DRVSEL CATLOAD FREE NFREE ! THEN ;
+  NFD @ DRVSEL CATLOAD FREE NFREE ! ;
 
 \ BLOAD reads a binary file to wherever you ask, steps the four-byte header
 \ off the front, and hands back the length that header claims.
