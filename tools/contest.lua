@@ -18,6 +18,7 @@
 --   nonzero ADDR N    assert N bytes from ADDR are not all zero
 --   screen            print the 80-column text screen, to see what it said
 --   pcs N             sample the PC and IP for N frames, print the hot pages
+--   key N N ...       post raw character codes, without waiting for a prompt
 --   drive N           type "N DRIVE" -- the Programs disk is 2
 --   filesabs N        assert the absolute file count (for INIT'd disks)
 --   rebase            re-anchor the files op's baseline to the current drive
@@ -192,6 +193,25 @@ local function run(step)
         -- natkeyboard types a character at a time over many frames; the
         -- posting flag waits that out, and post() waits for the prompt.
         post(rest .. "\n")
+        timer = 5
+    elseif op == "key" then
+        -- A single character posted without waiting for the prompt.  The
+        -- prompt gate is right for typing lines at the interpreter, but an
+        -- interactive word -- a menu bar, a paged listing -- never shows a
+        -- prompt while it is waiting, so nothing could ever be typed into
+        -- one.  Codes, not names: 10 and 11 are the down and up arrows,
+        -- 13 Return, 27 Escape.
+        -- Names go through post_coded, because natkeyboard:post maps
+        -- character 10 to Return rather than to the down arrow; numbers
+        -- are posted as characters for everything else.
+        for tok in rest:gmatch("%S+") do
+            if tok:match("^%d+$") then
+                manager.machine.natkeyboard:post(string.char(tonumber(tok)))
+            else
+                manager.machine.natkeyboard:post_coded("{" .. tok .. "}")
+            end
+        end
+        posting = true
         timer = 5
     elseif op == "clear" then
         -- ABORT empties the data stack, so a test never inherits a depth

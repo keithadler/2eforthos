@@ -362,6 +362,21 @@ not here or in `HELPTEXT`, treat it as machinery, not as an interface.
 `LOAD` zeroes it — but reading carries on after an error, so `LINE#` ends a
 line or two past the fault and the printed number is the one to trust.
 
+**Writing on the console.** `CPUT ( c col row -- )` puts a character
+anywhere on the 80-column screen and `CINV ( flag -- )` chooses inverse.
+They bypass the firmware, which is the only way to get inverse video:
+`COUT` sets the high bit on everything it prints and the high bit is what
+makes a character normal rather than inverse. Eighty columns are two banks
+— even columns in auxiliary memory — and with 80STORE set it is `PAGE2`
+that says which, so `CPUT` flips it per character and leaves main banked.
+
+**Menus.** `MENUS` loads `CTYPE`, `MENU-PICK` and `PICK`: a highlighted
+bar the arrow keys move, Return chooses and Escape leaves. `'MI` holds a
+word `( i -- addr len )` giving the text of item *i*, so the same bar
+serves a catalog, a list of records or anything else. Only the two rows
+that changed are redrawn — rewriting twenty lines per keypress is visible
+flicker at 1 MHz.
+
 **Arrays.** `ARRAY` loads them: `20 ARRAY SCORES` makes twenty cells and
 `3 SCORES` is the address of one. A subscript outside the array stops the
 line rather than handing back the next word's memory. `CARRAY` for bytes,

@@ -1975,6 +1975,41 @@ TESTS = {
     stack 2
 """,
 
+# The menu bar: draw it, move it with the arrows, choose with Return.
+# Ctrl-J and Ctrl-K are the down and up arrows -- same codes.
+"menus": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type MENUS
+    wait 4800
+    clear
+    type S" HI" 0 20 CTYPE
+    depth 0
+    clear
+    type 0 CATNAME NIP
+    stack 9
+    clear
+    \ MMOVE is what the arrow keys call, and it is where the clamping
+    \ lives -- the keyboard itself is checked by eye, since MAME's
+    \ post_coded does not reach a //e arrow key.
+    type ' CATNAME 'MI ! 5 MN ! 2 MTOP ! 0 MSEL ! 3 MMOVE MSEL @
+    wait 600
+    stack 3
+    clear
+    type 99 MMOVE MSEL @
+    wait 600
+    stack 4
+    clear
+    type -5 MMOVE MSEL @
+    wait 600
+    stack 0
+    clear
+    type 0 2 MENU-PICK
+    wait 900
+    stack -1
+""",
+
 "picture-roundtrip": """
     wait 300
     type INIT
@@ -2090,6 +2125,18 @@ TESTS = {
 
 # The tools and the language features that had no picture.  Each is a
 # console session a person could have typed.
+"shot-pick": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type MENUS
+    wait 4800
+    clear
+    type PICK
+    wait 2400
+    shot
+""",
+
 "shot-menu": """
     wait 300
     type MENU
