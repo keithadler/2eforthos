@@ -682,7 +682,23 @@ VARIABLE LTOP
 \ rest of the line is abandoned while the file streams in and announces
 \ itself; typed again, the word exists.  The kernel calls this through
 \ the 'NF vector, set at the end of this file.
-\ --- decimal numbers, and why they are not here ----------------------------
+\ --- decimal numbers -------------------------------------------------------
+\ The kernel scans the digits and hands the three integers here; this does
+\ the arithmetic, because the arithmetic wants the ROM's floating point
+\ and that is already wrapped in Forth.  Thirty-odd cells in the language
+\ card, against the several hundred a parser written entirely in Forth
+\ cost -- which is the difference between fitting and not.
+VARIABLE FQI VARIABLE FQF VARIABLE FQD VARIABLE FQN
+: (F#) ( int frac ndig neg -- )
+  FQN ! FQD ! FQF ! FQI !
+  FQI @ S>F
+  FQD @ IF
+    FQF @ S>F  1 FQD @ 0 DO 10 * LOOP S>F F/  F+
+  THEN
+  FQN @ IF -1 S>F F* THEN ;
+: F#ON ['] (F#) 'F# ! ;  F#ON
+
+\ --- the old note, kept because the reason still matters -------------------
 \ 3.14159 at the prompt was written, worked, and had to come out again.
 \ The parser is Forth, so it compiled into the language card, and the card
 \ had a few hundred bytes left: adding it put LATEST at $FF44, and a
@@ -847,21 +863,44 @@ VARIABLE GLA VARIABLE GLB
 \ the catalog (kernel.inc).  PICROOM stays as the guard: the margin is a
 \ few dozen bytes, and the day the kernel grows past it again this refuses
 \ honestly instead of writing into the I/O page at $C000.
-$4000 CONSTANT PICLEN
+\ Two files, one per bank, and only one of them staged.
+\
+\ The first version copied both halves of the screen into the dictionary
+\ so it could write them as a single sixteen-kilobyte file.  That made
+\ PICSAVE the largest single claim on main memory in the system, and the
+\ claim was the thing holding the language back: with it, the kernel had
+\ thirteen bytes of room to grow, and the decimal-number parser that
+\ needed a few hundred had nowhere to go.
+\
+\ The main half needs no staging at all -- it is already in main memory,
+\ which is what BSAVE reads.  Only the auxiliary half has to be copied
+\ across, and that is eight kilobytes, not sixteen.  PAINT worked this
+\ way from the start; this is PICSAVE catching up with it.
+\
+\ AUXBANK is PAGE2, not RAMRD: it moves the $2000-$3FFF window only, so
+\ the code doing the copying stays where it is.  RAMRD would take the
+\ instruction fetches with it.
+$2000 CONSTANT PICLEN                   \ one bank's worth
 : PICROOM ( -- ok )
   UNUSED PICLEN < IF
-    ." NEEDS 16K FREE, HAS " UNUSED . CR 0 ELSE -1 THEN ;
-: PICSAVE ( -- )                        \ asks for a name
+    ." NEEDS 8K FREE, HAS " UNUSED . CR 0 ELSE -1 THEN ;
+: PICSAVE ( -- )                        \ asks for two names, main then aux
   PICROOM 0= IF EXIT THEN
-  MAINBANK  $2000 HERE 8192 MOVE
-  AUXBANK   $2000 HERE 8192 + 8192 MOVE
+  MAINBANK  $2000 PICLEN BSAVE          \ straight off the screen
+  AUXBANK   $2000 HERE PICLEN MOVE      \ the other bank, through HERE
   MAINBANK  HERE PICLEN BSAVE ;
-: PICLOAD ( n -- )
-  PICROOM 0= IF DROP EXIT THEN
+\ Both halves come back through the staging area, and the main one cannot
+\ skip it: a file is a whole number of sectors, so eight kilobytes of
+\ picture arrives as 8448, and BLOADing that at $2000 writes the last
+\ 256 bytes over the start of the kernel at $4000.  It is still only
+\ eight kilobytes of staging, one half at a time.
+: PICLOAD ( nmain naux -- )
+  PICROOM 0= IF 2DROP EXIT THEN
   HERE BLOAD DROP
-  MAINBANK  HERE $2000 8192 MOVE
-  AUXBANK   HERE 8192 + $2000 8192 MOVE
-  MAINBANK ;
+  AUXBANK   HERE $2000 PICLEN MOVE
+  MAINBANK
+  HERE BLOAD DROP
+  HERE $2000 PICLEN MOVE ;
 
 \ --- loading a library ------------------------------------------------------
 \ Libraries live on the system disk in drive 1; programs live on drive 2.

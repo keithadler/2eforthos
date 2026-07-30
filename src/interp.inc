@@ -28,6 +28,14 @@ LATESTV:        .word FINAL_LATEST
 W_NFVEC:        jsr DOVAR
 NFVEC:          .word 0         ; xt of the not-found handler, 0 = off
 
+; The decimal reader scans the digits in assembly and hands the three
+; integers to the Forth word in here, which does the arithmetic.  Zero
+; until the boot source fills it, and storing zero again turns decimals
+; back off.
+        head    "'F#", 0
+W_FNUMV:        jsr DOVAR
+FNUMV:          .word 0
+
 ; ---------------------------------------------------------------------------
 ; Dictionary construction helpers
 ; ---------------------------------------------------------------------------
@@ -631,7 +639,7 @@ Interpret:
 
 @number:
         jsr     Number
-        bcc     @err
+        bcc     @float
         lda     STATEV
         ora     STATEV+1
         beq     @push
@@ -656,6 +664,11 @@ Interpret:
         sta     1,x
         jmp     @next
 
+; Not an integer -- try it as a decimal before calling it unknown.
+@float: jsr     NumberF
+        bcc     @err
+        jmp     @next
+
 ; A word that is neither defined nor a number is offered to the autoload
 ; vector before it becomes an error.  'NF holds the xt of a Forth handler
 ; -- AUTOLOAD in system.fth -- which gets ( addr len ) and answers with a
@@ -673,6 +686,17 @@ Interpret:
 ; Interpret, and the primed file streams next.  False, or no handler,
 ; falls into the question mark.
 TryAutoload:
+        ; Keep the word before running any Forth.  The handler looks files
+        ; up by name, and every word it runs parses its own input -- so
+        ; TMP1 and WORDLEN, which is all Error has to print from, are long
+        ; gone by the time it is reached.  Without this an unknown word
+        ; comes back as a blank line, or worse, as somebody else's text.
+        lda     TMP1
+        sta     NFSAV
+        lda     TMP1+1
+        sta     NFSAV+1
+        lda     WORDLEN
+        sta     NFSAV+2
         lda     NFVEC
         ora     NFVEC+1
         beq     @real
@@ -695,11 +719,177 @@ TryAutoload:
         jsr     DoRun
         lda     0,x
         ora     1,x
-        inx
-        inx
-        beq     @real
+        inx                             ; INX sets Z from X, not from A --
+        inx                             ; testing it here tested the stack
+        cmp     #0                      ; pointer, which is never zero, so
+        beq     @real                   ; every unknown word was silently
+        rts                             ; swallowed instead of questioned.
+@real:  lda     NFSAV                   ; put the word back for Error
+        sta     TMP1
+        lda     NFSAV+1
+        sta     TMP1+1
+        lda     NFSAV+2
+        sta     WORDLEN
+        jmp     Error                   ; prints, clears, returns for us
+
+; ---------------------------------------------------------------------------
+; NumberF -- read TMP1/WORDLEN as a decimal, and push it as a float.
+;
+; Carry set means it was one and the float is on the float stack.  The
+; scanning is here, in main memory, and the arithmetic is a Forth word in
+; 'F#.  That split is the whole point: written entirely in Forth this
+; filled the language card, and a card that full stops being a dictionary
+; -- words as ordinary as / and MOD went missing and */ ran into the
+; monitor, with no message, because nothing had crossed the line the
+; guard watches.  Main memory had the room only after PICSAVE stopped
+; staging both halves of the screen at once.
+;
+; Interpreting only: compiling a float literal would mean compiling
+; something that reconstructs it, so inside a colon definition a decimal
+; is still an unknown word.
+;
+; The whole part must fit a cell, and four places of fraction are kept --
+; about what a five-byte float can honestly show.
+NumberF:
+        lda     STATEV                  ; not while compiling
+        ora     STATEV+1
+        bne     @no0
+        lda     FNUMV
+        ora     FNUMV+1
+        beq     @no0
+        lda     #0
+        sta     FDI
+        sta     FDI+1
+        sta     FDF
+        sta     FDF+1
+        sta     FDN
+        sta     FDS
+        sta     FDDOT
+        sta     FDANY
+        sta     PIDX
+        lda     WORDLEN
+        cmp     #2                      ; ".5" is the shortest that can work
+        bcc     @no0
+        ldy     #0
+        lda     (TMP1),y
+        cmp     #'-'
+        bne     @scan
+        inc     FDS
+        inc     PIDX
+        bne     @scan
+; The bail-out sits here, in the middle, because everything that gives up
+; on this word is either just above or just inside the loop just below,
+; and a 6502 branch reaches 127 bytes.
+@no0:   clc
         rts
-@real:  jmp     Error                   ; prints, clears, returns for us
+@scan:  lda     PIDX
+        cmp     WORDLEN
+        bcs     @done
+        ldy     PIDX
+        lda     (TMP1),y
+        cmp     #'.'
+        bne     @dig
+        lda     FDDOT
+        bne     @no0                    ; a second point is not a number
+        inc     FDDOT
+        jmp     @next
+@dig:   sec
+        sbc     #'0'
+        bcc     @no0
+        cmp     #10
+        bcs     @no0
+        sta     NDIG
+        inc     FDANY
+        lda     FDDOT
+        bne     @frac
+        lda     FDI                     ; whole part *= 10, += digit
+        sta     TMP2
+        lda     FDI+1
+        sta     TMP2+1
+        jsr     Acc10
+        lda     TMP2
+        sta     FDI
+        lda     TMP2+1
+        sta     FDI+1
+        jmp     @next
+@frac:  lda     FDN
+        cmp     #4                      ; places past the fourth are dropped
+        bcs     @next
+        lda     FDF
+        sta     TMP2
+        lda     FDF+1
+        sta     TMP2+1
+        jsr     Acc10
+        lda     TMP2
+        sta     FDF
+        lda     TMP2+1
+        sta     FDF+1
+        inc     FDN
+@next:  inc     PIDX
+        bne     @scan
+@done:  lda     FDDOT                   ; no point, no decimal
+        beq     @no0
+        lda     FDANY                   ; and it must have had a digit
+        beq     @no0
+        dex                             ; ( int frac ndig neg )
+        dex
+        lda     FDI
+        sta     0,x
+        lda     FDI+1
+        sta     1,x
+        dex
+        dex
+        lda     FDF
+        sta     0,x
+        lda     FDF+1
+        sta     1,x
+        dex
+        dex
+        lda     FDN
+        sta     0,x
+        lda     #0
+        sta     1,x
+        dex
+        dex
+        lda     FDS
+        sta     0,x
+        lda     #0
+        sta     1,x
+        lda     FNUMV
+        sta     TMP2
+        lda     FNUMV+1
+        sta     TMP2+1
+        jsr     DoRun
+        sec
+        rts
+
+; TMP2 = TMP2*10 + NDIG.  Nine adds rather than shifts, because it runs
+; once per digit typed and being obviously right is worth more here than
+; a dozen cycles.
+Acc10:
+        lda     TMP2
+        sta     UTMP
+        lda     TMP2+1
+        sta     UTMP+1
+        lda     #9
+        sta     NCNT
+@l:     clc
+        lda     TMP2
+        adc     UTMP
+        sta     TMP2
+        lda     TMP2+1
+        adc     UTMP+1
+        sta     TMP2+1
+        dec     NCNT
+        bne     @l
+        clc
+        lda     TMP2
+        adc     NDIG
+        sta     TMP2
+        lda     TMP2+1
+        adc     #0
+        sta     TMP2+1
+        rts
 
 ; Echo the offending word with a '?', then abandon the line.
 Error:
