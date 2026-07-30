@@ -49,6 +49,8 @@ GrCursorHome:
         prim    "GR", W_GR, 0           ; graphics with four lines of text
         jsr     GrMode
         bit     MIXSET
+        lda     #1
+        sta     GRMIX
         lda     #20
         sta     WNDTOP
         jsr     GrCursorHome
@@ -59,6 +61,8 @@ GrCursorHome:
         prim    "GR-FULL", W_GRFULL, 0
         jsr     GrMode
         bit     MIXCLR
+        lda     #0
+        sta     GRMIX
         lda     #20                     ; still, so output cannot land on it
         sta     WNDTOP
         jsr     GrCursorHome
@@ -92,7 +96,31 @@ GrClear:
         iny
         cpy     #24
         bne     @row
-        rts
+        ; The bottom four rows are the text window in mixed mode, and a
+        ; graphics byte there is a character: colour 0 is $00, which the
+        ; //e draws as an inverse @, so clearing the screen to black laid
+        ; a band of them along the bottom of every lo-res program.  Blanks
+        ; instead -- and blanks rather than leaving them alone, because
+        ; what is already there is the odd columns of the 80-column
+        ; console, which is its own kind of rubbish at 40 columns.
+        lda     GRMIX
+        beq     @done
+        ldy     #20
+@trow:  lda     GRROWL,y
+        sta     GPTR
+        lda     GRROWH,y
+        sta     GPTR+1
+        sty     GRT
+        ldy     #39
+        lda     #$A0
+@tcol:  sta     (GPTR),y
+        dey
+        bpl     @tcol
+        ldy     GRT
+        iny
+        cpy     #24
+        bne     @trow
+@done:  rts
 
         prim    "GCLS", W_GCLS, 0       ; n --
         lda     0,x

@@ -87,9 +87,10 @@ GLX      = $1EA9                ; the lo-res driver's
 GLY      = $1EAA
 GRT      = $1EAB
 GTMP2    = $1EAC
+GRMIX    = $1EAE                ; lo-res: are the bottom four rows text?
 CARDBK   = $1EAD                ; how many aux banks the cold-start probe
                                 ; counted: 1 = stock 128K, 128 = an 8MB card
-                                ; $1EAE-$1FFF spare
+                                ; $1EAF-$1FFF spare
 
 .macro  NEXT
         jmp     DoNext
