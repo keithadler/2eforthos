@@ -1773,16 +1773,18 @@ TESTS = {
 # A size budget, which this did not have until the kernel had grown by a
 # third in a day and broken PICSAVE without anything noticing.
 #
-# Two thresholds matter.  15000 is the floor: below it there is not enough
-# room to load a demo and define anything.  16384 is what PICSAVE needs to
-# stage both halves of the screen -- once 412 bytes out of reach, regained
-# when the uninitialized buffers moved out of the image, and asserted here
-# so it cannot quietly go away again.
+# Two thresholds matter.  15000 is the working floor: below it there is not
+# enough room to load a demo and define anything.  8192 is what PICSAVE
+# needs -- it stages one bank of the screen at a time now, where it used to
+# stage both and need 16384.  That change is why the kernel has thousands of
+# bytes of room to grow rather than thirteen, and why the decimal reader
+# could be written in assembly at all; both numbers are asserted so neither
+# can quietly go away.
 "unused": """
     type UNUSED 15000 >
     stack -1
     clear
-    type UNUSED 16384 < 0=
+    type UNUSED 8192 < 0=
     stack -1
     clear
     type UNUSED $C000 HERE - =
@@ -1863,6 +1865,27 @@ TESTS = {
 # the write-then-read settling get: sixteen writes and then a read of what
 # was just written is exactly the sequence that used to come back with the
 # catalog it had erased.
+# Decimals: the kernel scans, a Forth word does the arithmetic.
+"decimals": """
+    type 3.14159 F>S
+    stack 3
+    clear
+    type 2.5 2.5 F* F>S
+    stack 6
+    clear
+    type -0.75 F>S
+    stack -1
+    clear
+    type .5 2.0 F* F>S
+    stack 1
+    clear
+    type 12.34.5
+    depth 0
+    clear
+    type 1.5 2.5 F+ F>S
+    stack 4
+""",
+
 "picture-roundtrip": """
     wait 300
     type INIT
@@ -1871,17 +1894,19 @@ TESTS = {
     type HGR HCLS 3 HCOLOR 100 40 HPLOT 200 96 50 HCIRCLE
     wait 600
     type PICSAVE
-    type PIC
-    wait 4200
-    filesabs 1
+    type PICM
+    wait 3000
+    type PICA
+    wait 3000
+    filesabs 2
     type HCLS
     wait 600
     type 100 40 HPOINT 200 146 HPOINT
     wait 300
     stack 0 0
     clear
-    type 0 PICLOAD
-    wait 3000
+    type 0 1 PICLOAD
+    wait 4200
     type 100 40 HPOINT 200 146 HPOINT
     wait 300
     stack -1 -1

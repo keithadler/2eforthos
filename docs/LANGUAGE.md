@@ -324,14 +324,20 @@ a buffer and the string is whatever is left between the pointer and the end.
 | `BTN` | `( -- flag )` | game port button 0 |
 | `PADDLE` | `( n -- u )` | game port channel `n`, 0..255 |
 
-**Decimal numbers are not here.** `3.14159` is an unknown word; `S>F` is how
-a float is made. A parser was written and taken out again — it is Forth, so
-it compiled into the language card, and the card had a few hundred bytes
-left. A dictionary that close to its ceiling stops being a dictionary:
-words as ordinary as `/` and `MOD` went missing and `*/` ran into the
-monitor. The feature belongs in the kernel's own number reader, in main
-memory, which is affordable once `PICSAVE` stops needing sixteen contiguous
-kilobytes.
+**Decimal numbers.** `3.14159` at the prompt pushes a float. The whole part
+must fit a cell and four places of fraction are kept, which is about what a
+five-byte float can honestly show. Interpreting only: inside a colon
+definition a decimal is still an unknown word.
+
+It took two attempts. Written entirely in Forth it compiled into the
+language card, which had a few hundred bytes left — and a dictionary that
+close to its ceiling stops being a dictionary, silently: words as ordinary
+as `/` and `MOD` went missing and `*/` ran into the monitor. The working
+version splits it. The kernel scans the digits, in main memory, which
+became affordable when `PICSAVE` stopped staging both halves of the screen
+at once; the arithmetic is thirty cells of Forth behind the `'F#` vector,
+because the arithmetic wants the ROM's floating point and that is already
+wrapped in Forth. Storing 0 in `'F#` turns decimals off.
 
 **Strings.** `STR` loads them: `S=` `SUB` `LEFT` `RIGHT` `SCAN` `SPLIT`
 `TRIM` `UPPER` `S>N` `N>S` `SBUF` `SCOPY` `SCAT`. A string is an address and
@@ -581,8 +587,8 @@ return.
 | `DFGETS` | `( addr n -- got eof )` | one line |
 | `FEOF?` | `( -- f )` | |
 | `FCLOSE` | | |
-| `PICSAVE` | | write the whole 16K screen, both banks |
-| `PICLOAD` | `( n -- )` | read one back |
+| `PICSAVE` | | write the screen as two files, one per bank |
+| `PICLOAD` | `( nmain naux -- )` | read one back |
 | `INIT` | | a fresh VTOC and empty catalog |
 
 `INIT` cannot format — writing address fields needs a track writer this

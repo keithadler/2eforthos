@@ -90,7 +90,14 @@ GTMP2    = $1EAC
 GRMIX    = $1EAE                ; lo-res: are the bottom four rows text?
 CARDBK   = $1EAD                ; how many aux banks the cold-start probe
                                 ; counted: 1 = stock 128K, 128 = an 8MB card
-                                ; $1EAF-$1FFF spare
+FDI      = $1EAF                ; 2: the decimal reader's whole part
+FDF      = $1EB1                ; 2: and its fraction
+FDN      = $1EB3                ; how many places that fraction has
+FDS      = $1EB4                ; was there a minus
+FDDOT    = $1EB5                ; has the point been seen
+FDANY    = $1EB6                ; has any digit been seen
+NFSAV    = $1EB7                ; 3: the unknown word, kept across the hook
+                                ; $1EBA-$1FFF spare
 
 .macro  NEXT
         jmp     DoNext
