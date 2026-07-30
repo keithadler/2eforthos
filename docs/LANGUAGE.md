@@ -324,6 +324,14 @@ a buffer and the string is whatever is left between the pointer and the end.
 | `BTN` | `( -- flag )` | game port button 0 |
 | `PADDLE` | `( n -- u )` | game port channel `n`, 0..255 |
 
+A word that is neither defined nor a number is offered to the **autoload
+hook** before it becomes an error: if the system disk carries `WORD.FTH`,
+that file is loaded — from either drive — and announces itself; the line is
+abandoned and typed again, the word exists. `'NF` holds the handler's xt
+(`AUTOLOAD`, armed at boot); storing 0 turns the feature off. This is how
+`MORE`, `MENU`, `SEE`, `DUMP`, `MARKER` and `RAMDISK` are commands without
+costing the dictionary a byte before first use.
+
 `PARSE-NAME` is how a word takes an argument from the line it was typed on:
 `HELP HGR` is `HELP` calling it and finding `HGR`. The text lives in the
 input buffer and lasts only until the next line is read.
@@ -513,7 +521,6 @@ pay nothing.
 | `DWRITE` | `( t s addr -- err )` | write one |
 | `DSEEK` | `( t -- )` | move the head |
 | `DRECAL` | | back to track 0 |
-| `DSTEP` `DHALF` `DADDR` `DBYTES` | | the pieces underneath |
 
 Sector numbers are DOS's, not the order they are written in — physical sector
 *P* of a track holds DOS sector `0,7,14,6,13,5,12,4,11,3,10,2,9,1,8,15`.

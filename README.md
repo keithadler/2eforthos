@@ -88,7 +88,8 @@ turn on when a program wants them.
 
 | command | |
 |---|---|
-| `HELP HGR` | help for any word, read from a file you can edit |
+| `HELP HGR` | help for any word, read from a file you can edit — from any drive |
+| `MORE`, `MENU`, `SEE`, `RAMDISK` | tools that load themselves when first named |
 | `2 DRIVE` | switch to the Programs disk — the examples and your big programs |
 | `CAT` | list the disk — number, lock, name, type, size |
 | `n LOAD` | compile a Forth source file off the floppy |
@@ -114,10 +115,16 @@ file and little else; the Programs disk in drive 2 carries every example —
 lunar lander, Breakout, the hat — and 350-odd free sectors for what you
 build. `2 DRIVE` switches, `1 DRIVE` comes home. And with a RamWorks card
 in the aux slot — MAME carries one, maxed at 1MB, the way a serious //e was
-run — `LIB RAMDISK.FTH` turns three of its banks into **drive 3**: a whole
+run — typing `RAMDISK` turns three of its banks into **drive 3**: a whole
 disk at memory speed, formatted the first time you switch to it, forgotten
 at power-off. The transfer code assembles itself out of a Forth file into
 the stack page, because no bank switch can touch $0100.
+
+**Words are commands.** A word the interpreter doesn't know is looked up as
+a file on the system disk before it becomes an error: type `MORE`, `MENU`,
+`SEE`, `DUMP`, `MARKER` or `RAMDISK` on any drive and the tool fetches
+itself, announces itself, and exists from then on. Adding a command to the
+OS is putting a file on the disk.
 
 **The OS writes to its own disk.** Lock, rename and delete all go through to
 the image, and MAME writes it back — delete a file inside the emulator and

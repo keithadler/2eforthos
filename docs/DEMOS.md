@@ -39,8 +39,9 @@ overwrite what was left of it.
 ## Tools and libraries on the system disk
 
 Drive 1 carries the loadable tools and libraries alongside the OS —
-things you reach for whatever you are building. `CAT` on drive 1 shows
-them:
+things you reach for whatever you are building. You don't load them:
+**naming one is enough** — an unknown word is looked up as a file on the
+system disk and fetches itself, from either drive.
 
 - **MORE.FTH** — `n MORE` pages through any text file twenty-two lines at
   a time; any key turns the page, `Q` stops. `HELPTEXT` and your own

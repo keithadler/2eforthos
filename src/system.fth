@@ -234,7 +234,7 @@ VARIABLE NFILE VARIABLE NFREE VARIABLE CTRK VARIABLE CSEC VARIABLE ESRC
 \ here on.
 : DRIVE ( n -- )
   DUP 1 < OVER 3 > OR IF DROP ." 1 2 OR 3" CR EXIT THEN
-  DUP 3 = 'ARD @ 0= AND IF DROP ." LIB RAMDISK.FTH FIRST" CR EXIT THEN
+  DUP 3 = 'ARD @ 0= AND IF DROP ." TYPE RAMDISK FIRST" CR EXIT THEN
   DUP DRV !  3 < IF DRV @ DRVSEL THEN
   DRV @ 3 = IF 'D3F @ EXECUTE THEN
   CATLOAD FREE NFREE !
@@ -669,6 +669,29 @@ VARIABLE LTOP
   LNORM
   LBUF @ 'SRC ! ;
 
+\ --- words as commands ------------------------------------------------------
+\ A word the interpreter cannot find is offered here before it becomes a
+\ question mark: if the system disk carries a file named WORD.FTH, that
+\ file is loaded -- so MORE, MENU and whatever tools come later are simply
+\ commands, fetched the first time they are named, from any drive.  The
+\ rest of the line is abandoned while the file streams in and announces
+\ itself; typed again, the word exists.  The kernel calls this through
+\ the 'NF vector, set at the end of this file.
+VARIABLE NFL VARIABLE NFA VARIABLE NFD
+: AUTOLOAD ( addr len -- f )
+  STATE @ IF 2DROP 0 EXIT THEN
+  'SRC 1+ C@ IF 2DROP 0 EXIT THEN       \ not while a file is streaming
+  DUP 1 < OVER 26 > OR IF 2DROP 0 EXIT THEN
+  NFL ! NFA !
+  NFA @ PAD NFL @ MOVE                  \ NAME.FTH at PAD
+  46 PAD NFL @ + C!  70 PAD NFL @ 1+ + C!
+  84 PAD NFL @ 2 + + C!  72 PAD NFL @ 3 + + C!
+  DRV @ NFD !
+  NFD @ 1 <> IF 1 DRVSEL CATLOAD THEN
+  PAD NFL @ 4 + FINDF
+  DUP 0< IF DROP 0 ELSE LOAD -1 THEN
+  NFD @ 1 <> IF NFD @ DRVSEL CATLOAD FREE NFREE ! THEN ;
+
 \ BLOAD reads a binary file to wherever you ask, steps the four-byte header
 \ off the front, and hands back the length that header claims.
 VARIABLE BLA
@@ -718,67 +741,11 @@ VARIABLE MKBASE VARIABLE MKLATEST
   REINDEX ;
 
 \ --- looking at things ----------------------------------------------------
-\ The debugging tax: an interactive interpreter is not the same as being able
-\ to stop and ask what a thing is.  These are the two questions worth asking
-\ -- what is in that memory, and what is that word made of.
-: HEXD ( n -- c ) 15 AND DUP 9 > IF 7 + THEN 48 + ;
-: .H2 ( n -- ) DUP 4 RSHIFT HEXD EMIT HEXD EMIT ;
-: .H4 ( n -- ) DUP 8 RSHIFT .H2 .H2 ;
-
-VARIABLE DMA VARIABLE DMN
-: .DBYTES ( -- ) 8 0 DO DMA @ I + C@ .H2 SPACE LOOP ;
-: .DCHARS ( -- )
-  8 0 DO DMA @ I + C@ 127 AND
-    DUP 32 < IF DROP 46 THEN DUP 126 > IF DROP 46 THEN EMIT LOOP ;
-: DUMP ( addr n -- )
-  DMN ! DMA !
-  BEGIN DMN @ 0> WHILE
-    DMA @ .H4 ." : " .DBYTES ." |" .DCHARS ." |" CR
-    8 DMA +!  -8 DMN +!
-  REPEAT ;
-
-\ Reverse lookup: which word owns this code field.  The definition chain runs
-\ newest to oldest and every header knows its own name length, so the code
-\ field is a fixed distance past it.
-: HDR>CFA ( hdr -- cfa ) DUP 4 + C@ 63 AND + 5 + ;
-: HDR>NAME ( hdr -- addr len ) DUP 5 + SWAP 4 + C@ 63 AND ;
-VARIABLE SEEX VARIABLE SEEN
-: >NAME ( xt -- addr len )
-  SEEX ! LATEST @
-  BEGIN DUP WHILE
-    DUP HDR>CFA SEEX @ = IF HDR>NAME EXIT THEN
-    @
-  REPEAT DROP 0 0 ;
-
-\ SEE walks the thread and names each cell.  LIT is followed by its value and
-\ the branches by a target, so those are printed rather than looked up --
-\ otherwise the number would be reported as whatever word happens to live at
-\ that address.
-: .CELL ( xt -- ) >NAME ?DUP IF TYPE ELSE DROP ." ?" THEN SPACE ;
-: SEE ( -- )
-  ' ?DUP 0= IF ." ?" CR EXIT THEN
-  DUP C@ 32 <> IF ." PRIMITIVE AT " .H4 CR EXIT THEN
-  ." : " DUP >NAME TYPE SPACE
-  3 +  200 SEEN !
-  BEGIN
-    SEEN @ 0= IF DROP ." ..." CR EXIT THEN
-    -1 SEEN +!
-    DUP @
-    DUP ['] EXIT = IF 2DROP ." ;" CR EXIT THEN
-    DUP ['] LIT = IF DROP 2 + DUP @ . 2 + 0 ELSE
-      DUP ['] BRANCH = OVER ['] 0BRANCH = OR IF
-        .CELL 2 + DUP @ ." ->" .H4 SPACE 2 + 0
-      ELSE .CELL 2 + 0 THEN
-    THEN DROP
-  AGAIN ;
-
-\ MARKER NAME makes a word that forgets everything defined after it, itself
-\ included -- which is what a demo file's leading marker was doing by hand.
-VARIABLE MKH VARIABLE MKL
-: MARKER ( -- )
-  HERE MKH ! LATEST @ MKL !
-  CREATE MKH @ , MKL @ ,
-  DOES> DUP @ SWAP 2 + @ LATEST ! DP ! REINDEX ;
+\ SEE, DUMP, MARKER and their helpers live in SEE.FTH on this disk, and
+\ the autoload hook fetches them the first time one is named -- the
+\ language card was full, and words you reach for occasionally are
+\ exactly what should ride on disk.  DUMP.FTH and MARKER.FTH are the
+\ same file under the names the hook will look for.
 
 \ --- inline tables of numbers ---------------------------------------------
 \ Applesoft's DATA and READ.  The values go in the dictionary between DATA:
@@ -885,6 +852,12 @@ $4000 CONSTANT PICLEN
 \ word itself, and every indented line after it belongs to the entry.  The
 \ file is data, not code, so adding an entry costs no dictionary at all.
 VARIABLE HWA VARIABLE HWL VARIABLE HON VARIABLE HHIT
+\ HELP hops to the system disk and back by itself: needing to know which
+\ drive the manual was in is the kind of question this system exists to
+\ make unnecessary.
+VARIABLE HDRV
+: HRESTORE ( -- )
+  HDRV @ 1 <> IF HDRV @ DRVSEL CATLOAD FREE NFREE ! THEN ;
 : HTOK? ( addr len -- f )               \ line's first token = the word?
   DUP HWL @ < IF 2DROP 0 EXIT THEN
   OVER HWL @ + C@ 32 <> OVER HWL @ <> AND IF 2DROP 0 EXIT THEN
@@ -899,18 +872,21 @@ VARIABLE HWA VARIABLE HWL VARIABLE HON VARIABLE HHIT
   2DUP HTOK? DUP HON ! IF -1 HHIT ! TYPE CR ELSE 2DROP THEN ;
 : HELPW ( addr len -- )
   HWL ! HWA !
+  DRV @ HDRV !
+  HDRV @ 1 <> IF 1 DRVSEL CATLOAD THEN
   S" HELPTEXT" FINDF DUP 0< IF
-    DROP ." HELPTEXT IS ON THE SYSTEM DISK -- 1 DRIVE FIRST" CR EXIT THEN
-  FOPEN 0= IF ." CANNOT OPEN HELPTEXT" CR EXIT THEN
+    DROP ." NO HELPTEXT ON THE SYSTEM DISK" CR HRESTORE EXIT THEN
+  FOPEN 0= IF ." CANNOT OPEN HELPTEXT" CR HRESTORE EXIT THEN
   0 HON ! 0 HHIT !
   BEGIN
     PAD 79 DFGETS >R              ( got ) ( r: eof )
     PAD SWAP HLINE?
     \ once the entry has been printed and has ended, the rest of the file
     \ has nothing more to say -- and it is a long file
-    HHIT @ HON @ 0= AND IF R> DROP FCLOSE EXIT THEN
+    HHIT @ HON @ 0= AND IF R> DROP FCLOSE HRESTORE EXIT THEN
   R> UNTIL FCLOSE
-  HHIT @ 0= IF ." NO ENTRY FOR THAT.  PLAIN HELP LISTS THE BASICS." CR THEN ;
+  HHIT @ 0= IF ." NO ENTRY FOR THAT.  PLAIN HELP LISTS THE BASICS." CR THEN
+  HRESTORE ;
 
 \ --- the greeting ----------------------------------------------------------
 \ The summary plain HELP prints is itself an entry in HELPTEXT -- the one
@@ -928,4 +904,5 @@ VARIABLE HWA VARIABLE HWL VARIABLE HON VARIABLE HHIT
   NFILE @ . ." FILES, " NFREE @ . ." SECTORS FREE." CR
   ." PROGRAMS ARE IN DRIVE 2: TYPE 2 DRIVE THEN CAT." CR
   ." TYPE HELP FOR A SUMMARY, OR HELP HGR FOR ONE WORD." CR ;
+: NFON ['] AUTOLOAD 'NF ! ;  NFON
 GREET

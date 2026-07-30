@@ -14,65 +14,11 @@ D2NIBA  = $0C00
 ; Forth words, for checking this against RWTS before anything depends on it.
 ; ---------------------------------------------------------------------------
 
-; DBYTES -- the six raw disk bytes after an address prologue, undecoded.
-; If the volume decodes but the sector does not, the fault is either in the
-; 4-and-4 decode or in what is actually on the disk, and only the raw bytes
-; tell the two apart.
-        prim    "DBYTES", W_DBYTES, 0   ; -- b1 b2 b3 b4 b5 b6
-        stx     XSAV
-        jsr     D2MotorOn
-        lda     D2Q7L
-        lda     D2Q6L
-        lda     #<32000
-        sta     D2BUDGET
-        lda     #>32000
-        sta     D2BUDGET+1
-@scan:
-@s1:    lda     D2Q6L
-        bpl     @s1
-        cmp     #$D5
-        bne     @next
-@s2:    lda     D2Q6L
-        bpl     @s2
-        cmp     #$AA
-        bne     @next
-@s3:    lda     D2Q6L
-        bpl     @s3
-        cmp     #$96
-        bne     @next
-        ldy     #0
-@grab:  lda     D2Q6L
-        bpl     @grab
-        sta     D2NIBA,y
-        iny
-        cpy     #6
-        bne     @grab
-        jmp     @done
-@next:  lda     D2BUDGET
-        bne     :+
-        dec     D2BUDGET+1
-:       dec     D2BUDGET
-        lda     D2BUDGET
-        ora     D2BUDGET+1
-        bne     @scan
-        lda     #0                      ; nothing found: report six zeroes
-        ldy     #0
-@zero:  sta     D2NIBA,y
-        iny
-        cpy     #6
-        bne     @zero
-@done:  ldx     XSAV
-        ldy     #6
-@push:  dey
-        dex
-        dex
-        lda     D2NIBA,y
-        sta     0,x
-        lda     #0
-        sta     1,x
-        tya
-        bne     @push
-        NEXT
+; DBYTES, DSTEP, DHALF and DADDR -- the head diagnostics -- were retired
+; to pay for the autoload hook: nearly two hundred bytes of main memory
+; that existed for one test.  The harness's pcs step is the hang-finder
+; now, and git remembers the code should the head ever need questioning
+; again.
 
 ; DRVSEL -- choose which drive the controller talks to.  1 or 2; anything
 ; else is treated as 1, because a wrong drive number must not become a
@@ -120,95 +66,6 @@ D2NIBA  = $0C00
         ldx     XSAV
         NEXT
 
-; DSTEP -- move n half tracks by incrementing the phase index, without
-; recalibrating.  Which way the head actually goes is the thing being
-; measured: read an address field before and after.
-        prim    "DSTEP", W_DSTEP, 0     ; n --
-        lda     0,x
-        sta     D2CNT
-        inx
-        inx
-        stx     XSAV
-        jsr     D2MotorOn
-@l:     inc     D2CURH
-        jsr     D2StepPhase
-        dec     D2CNT
-        bne     @l
-        ldx     XSAV
-        NEXT
-
-; DHALF -- where does the driver believe the head is, in half tracks?
-        prim    "DHALF", W_DHALF, 0     ; -- n
-        dex
-        dex
-        lda     D2CURH
-        sta     0,x
-        lda     #0
-        sta     1,x
-        NEXT
-
-; DADDR -- report the first address field that goes past, as ( track sector ).
-; 255 255 means no prologue was seen at all, which points at the drive rather
-; than at the matching logic.
-        prim    "DADDR", W_DADDR, 0
-        stx     XSAV
-        jsr     D2MotorOn
-        lda     D2Q7L
-        lda     D2Q6L
-        lda     #<32000
-        sta     D2BUDGET
-        lda     #>32000
-        sta     D2BUDGET+1
-        lda     #$FF
-        sta     D2GOTTRK
-        sta     D2TMP
-@scan:  jsr     D2Read1
-        cmp     #$D5
-        bne     @next
-        jsr     D2Read1
-        cmp     #$AA
-        bne     @next
-        jsr     D2Read1
-        cmp     #$96
-        bne     @next
-        jsr     D2Read44
-        sta     D2VOL
-        jsr     D2Read44
-        cmp     #35                     ; reject noise from a drive that has
-        bcs     @next                   ; not come up to speed
-        sta     D2GOTTRK
-        jsr     D2Read44
-        cmp     #16
-        bcs     @next
-        sta     D2TMP
-        jmp     @done
-@next:  lda     D2BUDGET
-        bne     :+
-        dec     D2BUDGET+1
-:       dec     D2BUDGET
-        lda     D2BUDGET
-        ora     D2BUDGET+1
-        bne     @scan
-@done:  ldx     XSAV
-        dex
-        dex
-        lda     D2VOL
-        sta     0,x
-        lda     #0
-        sta     1,x
-        dex
-        dex
-        lda     D2GOTTRK
-        sta     0,x
-        lda     #0
-        sta     1,x
-        dex
-        dex
-        lda     D2TMP
-        sta     0,x
-        lda     #0
-        sta     1,x
-        NEXT
 
         prim    "DWRITE", W_DWRITE, 0   ; track sector addr -- err
         lda     0,x
