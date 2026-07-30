@@ -373,9 +373,13 @@ that says which, so `CPUT` flips it per character and leaves main banked.
 **Menus.** `MENUS` loads `CTYPE`, `MENU-PICK` and `PICK`: a highlighted
 bar the arrow keys move, Return chooses and Escape leaves. `'MI` holds a
 word `( i -- addr len )` giving the text of item *i*, so the same bar
-serves a catalog, a list of records or anything else. Only the two rows
-that changed are redrawn — rewriting twenty lines per keypress is visible
-flicker at 1 MHz.
+serves a catalog, a list of records or anything else. The list scrolls:
+`MFIRST` is which item sits on the top row, and moving past either edge
+of the window slides it, so a list longer than the screen is still wholly
+reachable. Only the two rows that changed are redrawn when the bar moves
+inside the window — rewriting twenty lines per keypress is visible
+flicker at 1 MHz — and a scroll redraws the lot, which is the only time
+it has to.
 
 **Arrays.** `ARRAY` loads them: `20 ARRAY SCORES` makes twenty cells and
 `3 SCORES` is the address of one. A subscript outside the array stops the
