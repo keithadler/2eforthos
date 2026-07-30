@@ -156,6 +156,7 @@ AUXPROBE_LEN = * - AUXPROBE
 ; This is only what the kernel says while it is still building it.
 BANNER: .byte   "INITIALIZING...", $0D, $00
 DICTFULL: .byte "DICTIONARY FULL", $0D, $00
+INLINE:   .byte " IN LINE ", $00
 
 
 ; ---------------------------------------------------------------------------

@@ -1886,6 +1886,95 @@ TESTS = {
     stack 4
 """,
 
+# Arrays with bounds, INPUT, and an error that says which line.
+"arrays": """
+    wait 300
+    type ARRAY
+    wait 4800
+    clear
+    type 20 ARRAY SCORES 99 3 SCORES ! 3 SCORES @
+    wait 600
+    stack 99
+    clear
+    type 25 SCORES @
+    wait 600
+    depth 0
+    clear
+    type 4 5 2ARRAY GRID 7 2 3 GRID ! 2 3 GRID @
+    wait 900
+    stack 7
+    clear
+    type 4 0 GRID @
+    wait 600
+    depth 0
+    clear
+    type 0 5 GRID @
+    wait 600
+    depth 0
+    clear
+    type 10 CARRAY BY 65 2 BY C! 2 BY C@
+    wait 600
+    stack 65
+""",
+
+"input-words": """
+    wait 300
+    type INPUT
+    wait 6000
+    clear
+    type S" N? " ASK#
+    type 42
+    wait 900
+    stack -1 42
+    clear
+    type S" N? " ASK#
+    type WHAT
+    wait 900
+    stack 0 0
+    clear
+    type S" Y? " ASKY?
+    type YES
+    wait 900
+    stack -1
+    clear
+    type S" Y? " ASKY?
+    type NO
+    wait 900
+    stack 0
+""",
+
+# The error message that names the line, proved on a file the editor
+# wrote -- three lines, the third of them wrong.
+"error-line": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type EDIT
+    wait 4800
+    clear
+    type NEW
+    type +L
+    type : EL1 1 ;
+    type : EL2 2 ;
+    type ZZZQQ
+    type .
+    wait 600
+    type EWRITE
+    type ELINE.FTH
+    wait 3000
+    clear
+    loadwith ELINE.FTH LOAD
+    wait 2400
+    \ four, not three: the error printed IN LINE 3 and then the
+    \ interpreter read on, so the variable is where it has reached
+    type LINE# @
+    wait 300
+    stack 4
+    clear
+    type EL2
+    stack 2
+""",
+
 "picture-roundtrip": """
     wait 300
     type INIT
