@@ -324,6 +324,33 @@ a buffer and the string is whatever is left between the pointer and the end.
 | `BTN` | `( -- flag )` | game port button 0 |
 | `PADDLE` | `( n -- u )` | game port channel `n`, 0..255 |
 
+**Decimal numbers are not here.** `3.14159` is an unknown word; `S>F` is how
+a float is made. A parser was written and taken out again — it is Forth, so
+it compiled into the language card, and the card had a few hundred bytes
+left. A dictionary that close to its ceiling stops being a dictionary:
+words as ordinary as `/` and `MOD` went missing and `*/` ran into the
+monitor. The feature belongs in the kernel's own number reader, in main
+memory, which is affordable once `PICSAVE` stops needing sixteen contiguous
+kilobytes.
+
+**Strings.** `STR` loads them: `S=` `SUB` `LEFT` `RIGHT` `SCAN` `SPLIT`
+`TRIM` `UPPER` `S>N` `N>S` `SBUF` `SCOPY` `SCAT`. A string is an address and
+a length, and where the bytes live is yours to decide; `SBUF` offers eight
+64-byte slots for when it should not be. `S>N` is `VAL` with a flag, because
+Applesoft quietly returning 0 for rubbish turns a typo into an answer.
+
+**`DRV`** holds the current drive, 1 2 or 3. `DRIVE` sets it; every file
+word reads it.
+
+**On the words this reference does not list.** `WORDS` prints 441 names and
+this document describes about 300 of them. The rest are the system's own
+working parts — `FFA`, `WCNT`, `TSFLUSH`, the buffers and counters the
+catalog and the file writer keep between them. They are visible because a
+Forth dictionary is flat and hiding them would cost bytes to no purpose,
+but they are not a contract: they exist to serve the word above them and
+may be renamed or dropped whenever that word is rewritten. If a name is
+not here or in `HELPTEXT`, treat it as machinery, not as an interface.
+
 A word that is neither defined nor a number is offered to the **autoload
 hook** before it becomes an error: if the system disk carries `WORD.FTH`,
 that file is loaded — from either drive — and announces itself; the line is

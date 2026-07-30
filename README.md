@@ -2,8 +2,9 @@
 
 A Forth operating system for the Apple //e that **boots from its own sector
 and talks to the disk a nibble at a time** — no DOS on the floppy and none in
-memory. 290 words, an 80-column console, two graphics screens, and floating
-point borrowed from the ROM.
+memory. 441 words, an 80-column console, two graphics screens, floating
+point borrowed from the ROM, and a command set you extend by putting a file
+on a disk.
 
 ![the console at boot](docs/images/console-boot.png)
 
@@ -12,7 +13,7 @@ point borrowed from the ROM.
 ```bash
 make roms     # rebuild the Apple ROM set from AppleWin and apple2js (once)
 make gui      # boot it in a window
-make test     # 400+ assertions, headless, about seven minutes
+make test     # 480+ assertions, headless, about fifteen minutes
 ```
 
 ---
@@ -86,6 +87,33 @@ point is for curves, not money. Each fetches itself when named.
 ![ForthPaint](docs/images/app-paint.png)
 
 ![the ledger](docs/images/app-ledger.png)
+
+**`HELP` for any word, out of a file you can edit.** The manual is on the
+disk, not in the image — `HELP HXOR` finds its entry from whichever drive
+you happen to be on.
+
+![HELP for one word](docs/images/tool-help.png)
+
+**Strings, one of the two things Applesoft had that this didn't.** `STR`
+brings `SUB`, `LEFT`, `RIGHT`, `UPPER`, `SPLIT`, `TRIM`, `S>N` and the
+rest — and `S>N` returns a flag as well as a value, because Applesoft
+quietly answering 0 for rubbish turns a typo into an answer. (The other
+thing, typing `3.14` for a float, is still missing: see the language
+reference for what it cost to try.)
+
+![decimals and strings](docs/images/lang-strings.png)
+
+**`MENU` lists the Programs disk and asks which to load** — `2 DRIVE CAT
+n LOAD` folded into a question, and itself just a file that fetches
+itself when named.
+
+![the program menu](docs/images/tool-menu.png)
+
+**Three drives.** Two floppies and, if a memory card is fitted, a RAM
+disk at drive 3 — formatted on first use, written to like any other disk,
+gone at power-off.
+
+![the RAM disk as drive 3](docs/images/tool-drives.png)
 
 **Its own filesystem, without DOS underneath it.** `CAT` reads the catalog
 through a Disk II driver written from scratch — half-track seeking, 6-and-2
