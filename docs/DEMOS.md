@@ -8,7 +8,9 @@ drive 2 is free for what you build. So the first command is:
 2 DRIVE
 ```
 
-after which `CAT` lists the programs with the number `LOAD` wants:
+after which `CAT` lists the programs with the number `LOAD` wants. (One
+drive only? Swap the Programs disk into it and type `1 DRIVE` to reread —
+the machine never needs the system disk again until you name a tool.)
 
 ![the catalog](images/console-cat.png)
 

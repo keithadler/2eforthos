@@ -119,15 +119,25 @@ HGR  3 HCOLOR  280 96 80 HCIRCLE  40 520 20 170 HFRAME
 TEXT
 ```
 
-**Two floppies and a megabyte.** The system disk boots in drive 1 with the OS, the help
-file and little else; the Programs disk in drive 2 carries every example —
-lunar lander, Breakout, the hat — and 350-odd free sectors for what you
-build. `2 DRIVE` switches, `1 DRIVE` comes home. And with a RamWorks card
-in the aux slot — MAME carries one, maxed at 1MB, the way a serious //e was
-run — typing `RAMDISK` turns three of its banks into **drive 3**: a whole
-disk at memory speed, formatted the first time you switch to it, forgotten
-at power-off. The transfer code assembles itself out of a Forth file into
-the stack page, because no bank switch can touch $0100.
+**What it needs: a stock 128K //e and one disk drive.** Everything above
+runs on the machine as Apple sold it — enhanced or unenhanced — because
+128K is what double hi-res and the 80-column console cost. A second drive
+is comfort, not requirement: with one, keep the system disk in it and swap
+to the Programs disk with `1 DRIVE` after a change, the way 1983 did it.
+
+**Two floppies.** The system disk boots in drive 1 with the OS, the help
+file and the tools; the Programs disk in drive 2 carries every example —
+lunar lander, Breakout, the hat, the applications — and hundreds of free
+sectors for what you build. `2 DRIVE` switches, `1 DRIVE` comes home.
+
+**And, if you have one, a memory card.** A RamWorks-style card in the aux
+slot is entirely optional — without it `RAMDISK` says so and drives 1 and 2
+carry on — but with one, typing `RAMDISK` turns three of its banks into
+**drive 3**: a whole disk at memory speed, formatted the first time you
+switch to it, forgotten at power-off. The probe counts what you actually
+have, 256K to the full 8MB (MAME and apple2ts both emulate the 8MB card),
+and the transfer code assembles itself out of a Forth file into the stack
+page, because no bank switch can touch $0100.
 
 **Words are commands.** A word the interpreter doesn't know is looked up as
 a file on the system disk before it becomes an error: type `MORE`, `MENU`,
