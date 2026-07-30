@@ -44,6 +44,12 @@ from the other they cancel and the interference is what remains.
 
 ![interference patterns](docs/images/demo-moire.png)
 
+**Conway's Life**, on the lo-res screen — a random soup a dozen
+generations in, only the cells that changed repainted. The rules are four
+lines of Forth.
+
+![Life](docs/images/demo-life.png)
+
 **Arcs and pie slices**, written the parametric way once `FSIN` and `FCOS`
 existed — a ninety-sided polygon is a circle at this resolution.
 

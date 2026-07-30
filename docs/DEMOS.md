@@ -67,9 +67,8 @@ Life on the lo-res screen: a random soup runs until you press a key, and
 `GLIDER LIFE` launches the five-cell ship across an empty world. The
 whole ruleset is one line of Forth — `RULE` — and the test suite proves
 it by flying the glider four generations and checking where it landed.
-(No portrait yet: the scripted screenshot keeps catching console residue
-on the graphics page, and Life deserves a clean one. Watch it live
-instead — that is rather the point of Life.)
+
+![Life, a random soup a dozen generations in](images/demo-life.png)
 
 ## PAINT — ForthPaint
 

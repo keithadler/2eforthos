@@ -1938,13 +1938,10 @@ TESTS = {
     load LIFE.FTH
     wait 3000
     clear
-    type WCLR GLIDER
-    type 1 14 8 WA CELL C! 1 15 8 WA CELL C! 1 16 8 WA CELL C!
-    type 1 10 14 WA CELL C! 1 11 14 WA CELL C! 1 10 15 WA CELL C! 1 11 15 WA CELL C!
-    type GR 0 GCLS DRAW-ALL GEN GEN
-    wait 4800
+    type 7 RND-SEED!
+    type LIFE
+    wait 14400
     shot
-    type TEXT
 """,
 
 "gfxlib": """

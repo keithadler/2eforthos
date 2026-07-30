@@ -62,7 +62,11 @@ VARIABLE CUR VARIABLE NXT
   LOOP LOOP ;
 
 : LIFE ( -- )
-  CUR @ 0= IF WA CUR ! WB NXT ! SEED THEN
+  \ WCLR before SEED, not just SEED: the world is dictionary space and
+  \ ALLOT does not promise zeros, so the border SEED never touches came
+  \ up as whatever the last program left there -- a tidy dashed line
+  \ along the bottom of the first screenshot, which is not Life.
+  CUR @ 0= IF WA CUR ! WB NXT ! WCLR SEED THEN
   GR 0 GCLS DRAW-ALL
   BEGIN GEN KEY? UNTIL KEYC DROP
   TEXT 0 CUR ! ;
