@@ -678,6 +678,7 @@ VARIABLE LTOP
 \ itself; typed again, the word exists.  The kernel calls this through
 \ the 'NF vector, set at the end of this file.
 VARIABLE NFL VARIABLE NFA VARIABLE NFD
+VARIABLE NF2NO                          \ drive 2 already failed to answer
 : AUTOLOAD ( addr len -- f )
   STATE @ IF 2DROP 0 EXIT THEN
   'SRC 1+ C@ IF 2DROP 0 EXIT THEN       \ not while a file is streaming
@@ -691,8 +692,14 @@ VARIABLE NFL VARIABLE NFA VARIABLE NFD
   PAD NFL @ 4 + FINDF
   \ not a tool on the system disk?  perhaps a program on drive 2 --
   \ which is where PAINT, WRITE and their kind live, beside the space
-  \ they need
-  DUP 0< IF DROP 2 DRVSEL CATLOAD PAD NFL @ 4 + FINDF THEN
+  \ they need.  A machine with one drive has nothing in slot two, and a
+  \ mistyped word must not grind an empty drive for half a minute every
+  \ time -- so the first failure to read a catalog there is remembered,
+  \ and drive 2 is not asked again until reboot.
+  DUP 0< NF2NO @ 0= AND IF
+    DROP 2 DRVSEL CATLOAD
+    NFILE @ 0= IF -1 NF2NO ! THEN
+    PAD NFL @ 4 + FINDF THEN
   DUP 0< IF DROP 0 ELSE LOAD -1 THEN
   NFD @ DRVSEL CATLOAD FREE NFREE ! ;
 
@@ -902,7 +909,8 @@ VARIABLE HDRV
 \ definition; at the top level it would build one nobody runs.
 : GREET PAGE
   ." 2E FORTH OS  VERSION 1.0" CR
-  ." 6502 DIRECT-THREADED FORTH   APPLE //e  128K  80 COLUMNS" CR
+  ." 6502 DIRECT-THREADED FORTH   APPLE //e  "
+  $1EAD C@ 64 * 64 + 0 <# #S #> TYPE ." K  80 COLUMNS" CR
   ." (C) 2026 KEITH ADLER" CR CR
   CATLOAD FREE NFREE !
   NFILE @ . ." FILES, " NFREE @ . ." SECTORS FREE." CR
