@@ -68,6 +68,9 @@ local pcframes, pchist = 0, nil
 -- counter posts anyway after thirty seconds, so a step that types at
 -- something other than the prompt still can.
 local pendtext, pendok, pendwait = nil, 0, 0
+local assertwait = nil
+local ASSERTOPS = { stack=true, depth=true, check=true, mem=true,
+                    nonzero=true, files=true, filesabs=true }
 
 local function post(text)
     pendtext, pendok, pendwait = text, 0, 1800
@@ -420,6 +423,18 @@ SUBSCRIPTION = emu.add_machine_frame_notifier(function()
         manager.machine:exit()
         return
     end
-    local step = steps[at]; at = at + 1
+    local step = steps[at]
+    -- An assertion sampled while a word is still running photographs the
+    -- middle of its stack, which has produced every phantom failure this
+    -- suite ever chased: the assert ops hold, like typing does, until the
+    -- machine is back at the prompt.  The patience cap keeps a hung word
+    -- from hanging the test with it.
+    local op = step:match("^(%S+)")
+    if ASSERTOPS[op] and not atprompt() then
+        assertwait = (assertwait or 3600) - 1
+        if assertwait > 0 then return end
+    end
+    assertwait = nil
+    at = at + 1
     run(step)
 end)

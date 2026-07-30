@@ -68,7 +68,7 @@ BOOTFRAMES ?= 2000
 # Window size as a multiple of the emulated screen.  MAME keeps the aspect
 # ratio, so this is the box it fits the picture into.
 SCALE ?= 1
-MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -gameio joy -skip_gameinfo \
+MAME_COMMON := $(MACHINE) -rompath $(ROMS) -sl4 "" -aux rw3 -gameio joy -skip_gameinfo \
                -snapshot_directory $(SHOTS) \
                -cfg_directory $(CURDIR)/cfg -mouse
 

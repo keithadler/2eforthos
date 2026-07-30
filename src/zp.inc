@@ -47,6 +47,10 @@ HB1         = $CA               ; 1  first byte-column of a span
 HB2         = $CB               ; 1  last byte-column of a span
 HLM         = $CC               ; 1  left edge mask
 HRM         = $CD               ; 1  right edge mask
+; $DB-$DF are not the kernel's: they are the zero page reserved for
+; loadable libraries, which cannot be given prim scratch -- every prim
+; may tread on TMP1 and friends between two words of Forth.  RAMDISK.FTH
+; holds $DB-$DE as its transfer pointers.
 HCOLN       = $E0               ; 1  byte column being written, 0..79
 HBYTE       = $E1               ; 1  its index within the row, HCOLN >> 1
 

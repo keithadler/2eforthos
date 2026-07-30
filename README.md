@@ -109,10 +109,15 @@ HGR  3 HCOLOR  280 96 80 HCIRCLE  40 520 20 170 HFRAME
 TEXT
 ```
 
-**Two floppies.** The system disk boots in drive 1 with the OS, the help
+**Two floppies and a megabyte.** The system disk boots in drive 1 with the OS, the help
 file and little else; the Programs disk in drive 2 carries every example —
 lunar lander, Breakout, the hat — and 350-odd free sectors for what you
-build. `2 DRIVE` switches, `1 DRIVE` comes home.
+build. `2 DRIVE` switches, `1 DRIVE` comes home. And with a RamWorks card
+in the aux slot — MAME carries one, maxed at 1MB, the way a serious //e was
+run — `LIB RAMDISK.FTH` turns three of its banks into **drive 3**: a whole
+disk at memory speed, formatted the first time you switch to it, forgotten
+at power-off. The transfer code assembles itself out of a Forth file into
+the stack page, because no bank switch can touch $0100.
 
 **The OS writes to its own disk.** Lock, rename and delete all go through to
 the image, and MAME writes it back — delete a file inside the emulator and
