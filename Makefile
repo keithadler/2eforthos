@@ -162,6 +162,10 @@ $(DSK): $(BIN) $(BOOT1) build/bootsrc.bin $(DISKFILES) src/system.fth Makefile
 	@$(A2KIT) put -d $@ -f SYSTEM.FTH -t txt < src/system.fth
 	@for f in $(DISKFILES); do \
 	   $(A2KIT) put -d $@ -f $$(basename $$f) -t txt < $$f; done
+	@# the autoload hook maps WORD to WORD.FTH, so the inspection kit is
+	@# cataloged under each name a person will actually type
+	@$(A2KIT) put -d $@ -f DUMP.FTH -t txt < disk/SEE.FTH
+	@$(A2KIT) put -d $@ -f MARKER.FTH -t txt < disk/SEE.FTH
 	@python3 tools/mkdisk.py $@ $(BOOT1) $(BIN) $(ILEAVE) build/bootsrc.bin
 	@$(A2KIT) catalog -d $@
 

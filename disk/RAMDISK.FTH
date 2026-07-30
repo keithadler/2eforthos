@@ -99,17 +99,26 @@ $012C CONSTANT WRX
 \ Stamp the banks downward, read them back upward: on a real card each
 \ bank keeps its own stamp, and on a bare machine every write landed on
 \ the same 64K so nothing past "bank 1" answers right.
-: BPOKE ( n -- )
-  PAD 256 2 PICK FILL
+: BPOKE ( val bank -- )
+  SWAP PAD 256 ROT FILL
   PAD $DB !  $0200 $DD !  AXB C!  WRX CALL ;
-: BPEEK ( n -- c )
+: BPEEK ( bank -- c )
   AXB C!  $0200 $DD !  PAD $DB !  RDX CALL  PAD C@ ;
+\ The bank register takes seven bits, and cards ran from 256K to eight
+\ megabytes -- 128 banks, which apple2ts will emulate in full.  A card
+\ smaller than the register MIRRORS: bank 16 of a megabyte card is bank
+\ 0 wearing a bigger number, so counting stamps alone overcounts by one
+\ wrap.  Each candidate is therefore stamped alongside a canary in bank
+\ 0, and the first stamp that kills the canary is the first bank that
+\ is not really there.
 VARIABLE NBK
 : BPROBE ( -- n )
-  16 1 DO 16 I - BPOKE LOOP
   1 NBK !
-  16 1 DO I BPEEK I = IF 1 NBK +! ELSE LEAVE THEN LOOP
-  NBK @ ;
+  128 1 DO
+    165 0 BPOKE  I I BPOKE
+    0 BPEEK 165 =  I BPEEK I =  AND
+    IF I 1+ NBK ! ELSE LEAVE THEN
+  LOOP NBK @ ;
 
 \ --- formatting on first use ------------------------------------------------
 \ The card holds garbage at power-on, so the first switch to drive 3 finds
@@ -126,6 +135,13 @@ VARIABLE NBK
   BPROBE 4 < IF
     ." NO RAM EXPANSION FOUND -- DRIVE 3 STAYS OFF" CR EXIT THEN
   ['] ARD 'ARD !  ['] AWR 'AWR !  ['] D3F 'D3F !
-  ." RAM DISK READY: " NBK @ . ." BANKS, "
+  ." RAM DISK READY: " NBK @ . ." BANKS -- A "
   NBK @ 64 * . ." K CARD.  TYPE 3 DRIVE" CR ;
 (INSTALL)
+
+\ The word people type to get here -- the autoload hook maps RAMDISK to
+\ this file -- and the word they get once it is here, so the second
+\ mention answers instead of loading the file again.
+: RAMDISK ( -- )
+  'ARD @ IF ." DRIVE 3 IS READY -- TYPE 3 DRIVE" CR
+  ELSE ." NO RAM EXPANSION FOUND" CR THEN ;

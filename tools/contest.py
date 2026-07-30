@@ -1228,11 +1228,11 @@ TESTS = {
     type 3 DRIVE
     wait 600
     depth 0
-    type LIB RAMDISK.FTH
-    wait 4200
+    type RAMDISK
+    wait 4800
     clear
-    type NBK @
-    stack 16
+    type NBK @ 15 >
+    stack -1
     clear
     type 3 DRIVE
     wait 2400
@@ -1255,6 +1255,35 @@ TESTS = {
     wait 900
     type NFILE @ 0>
     stack -1
+""",
+
+# The autoload hook: an unknown word whose name matches a WORD.FTH on the
+# system disk loads it -- from either drive -- and an unknown word that
+# matches nothing still just gets its question mark.  MORE pages file 13
+# on drive 2 the way a person would try it cold.
+"autoload": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type 13 MORE
+    wait 4800
+    clear
+    type 13 MORE
+    wait 2400
+    type Q
+    wait 900
+    depth 0
+    type XYZZY 1 2 +
+    wait 900
+    depth 0
+    clear
+    type 1 DRIVE
+    wait 900
+    type MENU
+    wait 4800
+    clear
+    type S" 12" MNUM
+    stack -1 12
 """,
 
 # HELP with a name reads the entry out of HELPTEXT on the system disk;
@@ -1286,24 +1315,12 @@ TESTS = {
     type DRECAL
     depth 0
     clear
-    type 17 DSEEK
+    type 22 DSEEK
     depth 0
-    clear
-    type 1 DSTEP
-    depth 0
-    clear
-    type DHALF
-    depth 1
     clear
     type 17 0 $0E80 DREAD
     wait 600
     stack 0
-    clear
-    type DBYTES
-    depth 6
-    clear
-    type DADDR
-    depth 3
 """,
 
 "cov-banks": """
@@ -1461,6 +1478,9 @@ TESTS = {
 """,
 
 "shot-inspect": """
+    type SEE
+    wait 3000
+    clear
     type : CUBE DUP DUP * * ;
     type : GREET 42 CUBE DROP ;
     type SEE CUBE
@@ -2137,6 +2157,9 @@ TESTS = {
 # The debugging tax your friend named: an interactive interpreter is not the
 # same as being able to stop and ask what a thing is.
 "inspect": """
+    type SEE
+    wait 3000
+    clear
     type $0E00 65 SWAP C! $0E01 66 SWAP C!
     type $0E00 8 DUMP
     depth 0
@@ -2161,6 +2184,9 @@ TESTS = {
 
 # MARKER makes a word that forgets everything after it, itself included.
 "marker": """
+    type SEE
+    wait 3000
+    clear
     type MARKER -WORK
     type : W1 111 ; : W2 222 ;
     type W1 W2

@@ -24,6 +24,10 @@ DPV:            .word KERNEL_END
 W_LATEST:       jsr DOVAR
 LATESTV:        .word FINAL_LATEST
 
+        head    "'NF", 0
+W_NFVEC:        jsr DOVAR
+NFVEC:          .word 0         ; xt of the not-found handler, 0 = off
+
 ; ---------------------------------------------------------------------------
 ; Dictionary construction helpers
 ; ---------------------------------------------------------------------------
@@ -652,8 +656,50 @@ Interpret:
         sta     1,x
         jmp     @next
 
-@err:   jsr     Error
+; A word that is neither defined nor a number is offered to the autoload
+; vector before it becomes an error.  'NF holds the xt of a Forth handler
+; -- AUTOLOAD in system.fth -- which gets ( addr len ) and answers with a
+; flag: true means it primed a file off the system disk bearing the
+; word's name, and the rest of this line is quietly abandoned so the file
+; can stream and announce itself; false falls through to the question
+; mark.  The vector is a cell of zero until the boot source fills it, so
+; a kernel without the handler still just says NAME?.
+@err:   jmp     TryAutoload
 @done:  rts
+
+; The out-of-line half of the autoload hook: hand ( addr len ) of the
+; unknown word to the Forth handler in 'NF.  True back means a file was
+; primed and this line is quietly over -- returning here returns from
+; Interpret, and the primed file streams next.  False, or no handler,
+; falls into the question mark.
+TryAutoload:
+        lda     NFVEC
+        ora     NFVEC+1
+        beq     @real
+        dex
+        dex
+        lda     TMP1
+        sta     0,x
+        lda     TMP1+1
+        sta     1,x
+        dex
+        dex
+        lda     WORDLEN
+        sta     0,x
+        lda     #0
+        sta     1,x
+        lda     NFVEC
+        sta     TMP2
+        lda     NFVEC+1
+        sta     TMP2+1
+        jsr     DoRun
+        lda     0,x
+        ora     1,x
+        inx
+        inx
+        beq     @real
+        rts
+@real:  jmp     Error                   ; prints, clears, returns for us
 
 ; Echo the offending word with a '?', then abandon the line.
 Error:
