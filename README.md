@@ -79,6 +79,35 @@ drive 2, all played from the prompt.
 
 ![the hat](docs/images/game-hat.png)
 
+**A spreadsheet, because VisiCalc is what made people buy an Apple II.**
+Six columns by twelve rows, the cursor moved with the arrows and shown in
+inverse, a number typed straight in, and a total under every column,
+beside every row, and in the corner. Whole numbers, not floats: a column
+of money adds up exactly in integers and does not in five-byte floating
+point.
+
+![the spreadsheet](docs/images/app-calc.png)
+
+**A card file, the third AppleWorks application.** Names, telephone
+numbers and a note, browsed with the bar, added and deleted, and saved as
+one file — the count and the cards go out together, because they were
+allotted next to each other.
+
+![the card file](docs/images/app-cards.png)
+
+**A word processor that wraps whole words.** Type and it fills the line,
+and when a word will not fit it moves down entire — the screen rubs out
+the half-typed word and prints it again below, because every character
+was echoed as it was typed.
+
+![the word processor](docs/images/app-write.png)
+
+**An editor, so you can write code on the machine.** `n EEDIT` reads a
+file in and lists it numbered; retype the line that was wrong, `EWRITE`,
+`LOAD`. That is the loop Applesoft had, on a file.
+
+![the line editor](docs/images/tool-edit.png)
+
 **Applications, not just demos.** ForthPaint — paddles aim, button inks,
 five tools, XOR undo, save and resume. ForthWrite composes prose with word
 wrap. And a ledger that keeps exact cents in double cells, because floating
@@ -199,6 +228,22 @@ uses the real image, so changes you make interactively stick.
 Boot takes about 31 emulated seconds, most of it compiling the system's own
 Forth source (see *Boot cost* below).
 
+## The rest of the gallery
+
+Every program on the Programs disk, and every corner of the language,
+photographed on the machine. These are the tutorial set and the smaller
+demos — the ones above are the headline acts.
+
+| | |
+|---|---|
+| ![](docs/images/ex-stack.png) **`STACK.FTH`** — the stack, drawn | ![](docs/images/ex-loops.png) **`LOOPS.FTH`** — every loop form |
+| ![](docs/images/ex-conds.png) **`CONDS.FTH`** — conditionals | ![](docs/images/ex-defining.png) **`DEFINING.FTH`** — `CREATE ... DOES>` |
+| ![](docs/images/ex-math.png) **`MATH.FTH`** — mixed precision | ![](docs/images/ex-strings.png) **`STRINGS.FTH`** — quoting and printing |
+| ![](docs/images/ex-diskio.png) **`DISKIO.FTH`** — raw sectors | ![](docs/images/ex-sound.png) **`SOUND.FTH`** — the speaker |
+| ![](docs/images/ex-paddle.png) **`PADDLE.FTH`** — the game port | ![](docs/images/console-primes.png) **`PRIMES.FTH`** — a sieve |
+| ![](docs/images/console-lang.png) **`LANG.FTH`** — the language itself | ![](docs/images/demo-bounce.png) **`BOUNCE.FTH`** — XOR animation |
+| ![](docs/images/demo-bands.png) **`GFX.FTH`** — fills and bands | ![](docs/images/console-help.png) **`HELP`** — the summary |
+
 ## Licence
 
 [MIT](LICENSE). Woz handed out the Apple I schematics at Homebrew and printed
@@ -240,7 +285,7 @@ verifies every CRC.
 | `src/d2core.inc` | the Disk II driver: seek, read, write, 6-and-2 |
 | `src/diskii.inc` | Forth bindings for it (`DREAD`, `DWRITE`) |
 | `src/zp.inc` | zero page allocation |
-| `examples/*.FTH` | twenty-eight Forth programs — demos, tutorials, games, and applications — put on the Programs disk by `make disk` |
+| `examples/*.FTH` | thirty-four Forth programs — demos, tutorials, libraries, games and applications — put on the Programs disk by `make disk` |
 | `disk/*` | the plain text files that also go on it |
 | `docs/` | the language reference, tutorial, history and demo gallery |
 | `test/hirestest.s` | drives the graphics driver from plain assembly, no Forth |
@@ -539,7 +584,7 @@ Three kinds, in increasing order of how much of the system they need:
 |---|---|
 | `examples/hello.s` | 31 bytes of 6502 that prints a string through the monitor ROM. Where this started. |
 | `test/hirestest.s` | drives `hires.inc` directly — no Forth, no disk, just the screen driver and a diagonal. |
-| `examples/*.FTH` | twenty-eight Forth programs on the Programs disk — demos, a commented tutorial set, three games, and three applications. |
+| `examples/*.FTH` | thirty-four Forth programs on the Programs disk — demos, a commented tutorial set, libraries, three games and four applications. |
 
 Both assembly ones still build:
 
@@ -550,7 +595,7 @@ ca65 -I src -I build test/hirestest.s -o /tmp/ht.o
 
 ## The demos on the disk
 
-Six Forth programs ship on the floppy. `CAT` lists them; `n LOAD` reads one
+Thirty-four Forth programs ship on the Programs floppy. `CAT` lists them, `PICK` offers them with a bar, and `n LOAD` reads one
 in and tells you what to type. [docs/DEMOS.md](docs/DEMOS.md) has the source
 and a screenshot of each.
 

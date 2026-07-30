@@ -381,6 +381,15 @@ inside the window — rewriting twenty lines per keypress is visible
 flicker at 1 MHz — and a scroll redraws the lot, which is the only time
 it has to.
 
+**Why every program carries its own copies.** `CALC` and `CARDS` each
+have their own number reader and console writer rather than using `STR`
+or `MENUS`. A file cannot `LOAD` another file — `LOAD` points the
+interpreter at the new source and the rest of the old one is never read —
+so a dependency would mean the file ending silently at the `LOAD` with
+none of its own words defined. That is the honest cost of the loader
+being one buffer deep, and it is why a new application here is real work
+rather than a script.
+
 **Arrays.** `ARRAY` loads them: `20 ARRAY SCORES` makes twenty cells and
 `3 SCORES` is the address of one. A subscript outside the array stops the
 line rather than handing back the next word's memory. `CARRAY` for bytes,
