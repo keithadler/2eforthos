@@ -36,15 +36,26 @@ VARIABLE WLINES VARIABLE WCOL VARIABLE WESC
 
 \ Carry the unfinished last word to the next line, whole.  Scan back for
 \ the space; everything after it moves down.
-VARIABLE WBRK
+VARIABLE WBRK VARIABLE WRUB
 : WWRAP ( -- )
   WCOL @ WBRK !
   BEGIN WBRK @ 0> WCUR 1+ WBRK @ + 1- C@ 32 <> AND WHILE -1 WBRK +! REPEAT
-  WBRK @ 0= IF WFLUSH EXIT THEN         \ one huge word: just break it
+  WBRK @ 0= IF WFLUSH 0 WRUB ! EXIT THEN   \ one huge word: just break it
   WCOL @ WBRK @ - >R
   WCUR 1+ WBRK @ +  PAD  R@ MOVE        \ the carried word, aside
+  R@ 1+ WRUB !                          \ it and the space before it
   WBRK @ 1- 0 MAX WCOL ! WFLUSH
   PAD WCUR 1+ R@ MOVE  R> WCOL ! ;
+
+\ The buffer wraps whole words; the screen does not, because every
+\ character was echoed as it was typed and the carried word is already
+\ sitting at the end of the line above.  So rub it out and print it
+\ again below.  Without this the buffer was right and the display said
+\ AND TH / IS ONE, which is the thing this program exists not to do.
+: WRDRAW ( -- )
+  WRUB @ 0 ?DO 8 EMIT 32 EMIT 8 EMIT LOOP
+  CR
+  WCOL @ 0 ?DO WCUR 1+ I + C@ EMIT LOOP ;
 
 : WKEY ( -- c ) BEGIN KEY? UNTIL KEYC ;
 
@@ -58,7 +69,7 @@ VARIABLE WBRK
     WCOL @ 0> IF -1 WCOL +! 8 EMIT 32 EMIT 8 EMIT THEN EXIT THEN
   DUP 32 < IF DROP EXIT THEN
   DUP WSHOW WPUT
-  WCOL @ WRAP > IF WWRAP CR THEN ;
+  WCOL @ WRAP > IF WWRAP WRDRAW THEN ;
 
 : WRITE ( -- )
   0 WLINES ! WOPEN 0 WESC !

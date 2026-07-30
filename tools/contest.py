@@ -2033,6 +2033,70 @@ TESTS = {
     stack 0 0
 """,
 
+# The spreadsheet: addressing, sums both ways, and the grand total.
+"calc": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type CALC
+    wait 6000
+    clear
+    type 5 3 CADR CDATA -
+    stack 46
+    clear
+    type CCLR 100 0 0 CSET 250 0 1 CSET 30 1 0 CSET
+    wait 600
+    type 0 CSUMC 1 CSUMC 0 CSUMR
+    wait 900
+    stack 130 30 350
+    clear
+    type -5 2 2 CSET 2 CSUMC
+    wait 600
+    stack -5
+    clear
+    type CCLR 0 CSUMC 0 CSUMR
+    wait 600
+    stack 0 0
+    clear
+    type S" -42" E>N
+    stack -1 -42
+    clear
+    type S" 4X" E>N
+    stack 0 0
+""",
+
+# The card file: record addressing, padded fields, and the delete that
+# has to walk upward so the copy does not eat its own tail.
+"cards": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type CARDS
+    wait 7200
+    clear
+    type CCLR NCARD 1 RNAME CBASE -
+    wait 900
+    stack 58 0
+    clear
+    type S" WOZ" 0 RNAME NLEN FPUT S" JOBS" 1 RNAME NLEN FPUT
+    type S" RASKIN" 2 RNAME NLEN FPUT 3 NCARD!
+    wait 900
+    type 0 RNAME NLEN FLEN 2 RNAME NLEN FLEN
+    wait 600
+    stack 6 3
+    clear
+    type 0 SEL ! CDEL NCARD
+    wait 1200
+    stack 2
+    clear
+    type 0 RNAME NLEN FLEN 1 RNAME NLEN FLEN
+    wait 600
+    stack 6 4
+    clear
+    type S" 42" F>N
+    stack -1 42
+""",
+
 "picture-roundtrip": """
     wait 300
     type INIT
@@ -2148,6 +2212,80 @@ TESTS = {
 
 # The tools and the language features that had no picture.  Each is a
 # console session a person could have typed.
+"shot-write": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type WRITE
+    wait 6000
+    clear
+    type PAGE
+    type WRITE
+    wait 600
+    key 84 72 69 32 65 80 80 76 69 32 73 73 32 87 65 83 32 83 79 76 68 32 87 73 84 72 32 65 32 87 79 82 68
+    key 32 80 82 79 67 69 83 83 79 82 32 73 78 32 77 73 78 68 44 32 65 78 68 32 84 72 73 83 32 79 78 69
+    key 32 87 82 65 80 83 32 87 72 79 76 69 32 87 79 82 68 83 32 79 78 84 79 32 84 72 69 32 78 69 88 84
+    key 32 76 73 78 69 32 82 65 84 72 69 82 32 84 72 65 78 32 83 80 76 73 84 84 73 78 71 32 84 72 69 77 46
+    wait 1800
+    shot
+    key 27
+""",
+
+"shot-edit": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type EDIT
+    wait 4800
+    clear
+    type PAGE NEW
+    type +L
+    type : SQUARE DUP * ;
+    type : CUBE DUP SQUARE * ;
+    type : SHOW 5 CUBE . ;
+    type .
+    wait 600
+    type LIST
+    wait 1200
+    shot
+""",
+
+"shot-cards": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type CARDS
+    wait 7200
+    clear
+    type : KFILL CCLR S" WOZNIAK, STEVE" 0 RNAME NLEN FPUT S" 555-0100" 0 RPHONE PLEN FPUT S" BUILT THE THING" 0 RNOTE TLEN FPUT ;
+    type KFILL
+    type : KF2 S" JOBS, STEVE" 1 RNAME NLEN FPUT S" 555-0101" 1 RPHONE PLEN FPUT S" SOLD THE THING" 1 RNOTE TLEN FPUT ;
+    type KF2
+    type : KF3 S" RASKIN, JEF" 2 RNAME NLEN FPUT S" 555-0102" 2 RPHONE PLEN FPUT S" NAMED THE THING" 2 RNOTE TLEN FPUT 3 NCARD! ;
+    type KF3
+    wait 900
+    type : KSHOW 1 SEL ! 0 FIRST ! CLIST BEGIN KEY? UNTIL ;
+    type KSHOW
+    wait 3600
+    shot
+""",
+
+"shot-calc": """
+    wait 300
+    type 2 DRIVE
+    wait 900
+    type CALC
+    wait 6000
+    clear
+    type : CFILL 1200 0 0 CSET 980 0 1 CSET 1450 0 2 CSET 640 1 0 CSET 720 1 1 CSET 515 1 2 CSET 300 2 0 CSET 260 2 1 CSET 410 2 2 CSET ;
+    type CFILL
+    wait 900
+    type : CSHOW 2 CX ! 1 CY ! CDRAW BEGIN KEY? UNTIL ;
+    type CSHOW
+    wait 3600
+    shot
+""",
+
 "shot-pick": """
     wait 300
     type 2 DRIVE
