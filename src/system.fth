@@ -667,6 +667,7 @@ VARIABLE LTOP
 : LNORM LBUF @ BEGIN DUP C@ ?DUP WHILE 127 AND OVER C! 1+ REPEAT DROP ;
 
 : LOAD ( n -- ) FPICK 0= IF EXIT THEN
+  0 LINE# !                             \ so an error can say where it was
   FSEC SECBUF RD 0= IF DISKERR EXIT THEN
   LDTOP LTOP !
   LDBUF DUP LBUF ! LP !

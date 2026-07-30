@@ -36,6 +36,15 @@ NFVEC:          .word 0         ; xt of the not-found handler, 0 = off
 W_FNUMV:        jsr DOVAR
 FNUMV:          .word 0
 
+; Which line of a file is being interpreted.  An error inside a LOAD used
+; to name only the word it choked on, with nothing to say where among four
+; hundred lines that word lived -- the one thing Applesoft's ?SYNTAX ERROR
+; IN 340 always had over this.  LOAD zeroes it and every line refilled from
+; a file counts.
+        head    "LINE#", 0
+W_LINENO:       jsr DOVAR
+LINENO:         .word 0
+
 ; ---------------------------------------------------------------------------
 ; Dictionary construction helpers
 ; ---------------------------------------------------------------------------
@@ -243,7 +252,10 @@ BumpSrc:
 Refill:
         lda     SRC+1
         beq     @kbd
-        lda     #0
+        inc     LINENO                  ; which line of the file this is
+        bne     :+
+        inc     LINENO+1
+:       lda     #0
         sta     TIBLEN
         sta     TOIN
         ; A loaded file lives on hi-res page 1, and 80STORE is set for the
@@ -863,6 +875,50 @@ NumberF:
         sec
         rts
 
+; Print TMP2 as an unsigned decimal.  The pictured-output words would do
+; this better, but they are Forth, in the language card, and Error is
+; assembly that has to work when the dictionary is what went wrong.
+; Repeated subtraction of the five powers of ten, leading zeros suppressed.
+PDECTAB:
+        .word   10000, 1000, 100, 10, 1
+PrDec:
+        lda     #0
+        sta     NCNT                    ; have we printed anything yet
+        ldy     #0
+@digit: lda     #0
+        sta     NDIG
+@sub:   sec
+        lda     TMP2
+        sbc     PDECTAB,y
+        sta     UTMP
+        lda     TMP2+1
+        sbc     PDECTAB+1,y
+        bcc     @next                   ; would go negative: digit is done
+        sta     TMP2+1
+        lda     UTMP
+        sta     TMP2
+        inc     NDIG
+        bne     @sub
+@next:  lda     NDIG
+        bne     @emit
+        lda     NCNT
+        beq     @skip                   ; still in the leading zeros
+@emit:  lda     #1
+        sta     NCNT
+        lda     NDIG
+        clc
+        adc     #'0'
+        jsr     PutChar
+@skip:  iny
+        iny
+        cpy     #10
+        bne     @digit
+        lda     NCNT
+        bne     @done
+        lda     #'0'                    ; the number was zero
+        jsr     PutChar
+@done:  rts
+
 ; TMP2 = TMP2*10 + NDIG.  Nine adds rather than shifts, because it runs
 ; once per digit typed and being obviously right is worth more here than
 ; a dozen cycles.
@@ -907,6 +963,19 @@ Error:
         jsr     PutChar
         lda     #'?'
         jsr     PutChar
+        lda     SRC+1                   ; typed at the prompt: you can see
+        beq     @nowhere                ; where it was
+        lda     #<INLINE
+        sta     TMP2
+        lda     #>INLINE
+        sta     TMP2+1
+        jsr     PutStr
+        lda     LINENO
+        sta     TMP2
+        lda     LINENO+1
+        sta     TMP2+1
+        jsr     PrDec
+@nowhere:
         stx     XSAV
         ROMIN
         jsr     CROUT

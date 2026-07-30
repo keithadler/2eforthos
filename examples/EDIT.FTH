@@ -103,6 +103,13 @@ VARIABLE ESA VARIABLE ESL VARIABLE EFP
   ." n DEL-L    DELETE LINE n" CR
   ." n EREAD    READ A FILE IN" CR
   ." EWRITE     WRITE IT OUT, ASKING FOR A NAME" CR
+  ." n EEDIT    READ A FILE IN AND LIST IT" CR
   ." THEN n LOAD IT, THE WAY YOU WOULD ANY OTHER FILE." CR ;
+
+\ The Applesoft loop was LIST, retype line 100, RUN.  This is the same
+\ shape on a file: EEDIT reads one in and shows it numbered, you change
+\ the lines you meant to, EWRITE puts it back, LOAD runs it.
+: EEDIT ( n -- ) EREAD LIST ;
+: EDIT ( -- ) EHELP ;
 
 ." LOADED.  TYPE EHELP" CR

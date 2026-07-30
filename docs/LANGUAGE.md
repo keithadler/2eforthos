@@ -357,6 +357,21 @@ but they are not a contract: they exist to serve the word above them and
 may be renamed or dropped whenever that word is rewritten. If a name is
 not here or in `HELPTEXT`, treat it as machinery, not as an interface.
 
+**Where an error happened.** An error inside a `LOAD` names the line:
+`ZZZQQ ? IN LINE 3`. `LINE#` holds the line the interpreter has reached and
+`LOAD` zeroes it — but reading carries on after an error, so `LINE#` ends a
+line or two past the fault and the printed number is the one to trust.
+
+**Arrays.** `ARRAY` loads them: `20 ARRAY SCORES` makes twenty cells and
+`3 SCORES` is the address of one. A subscript outside the array stops the
+line rather than handing back the next word's memory. `CARRAY` for bytes,
+`r c 2ARRAY` for two dimensions, both subscripts checked.
+
+**Asking questions.** `INPUT` loads `ASK$`, `ASK#` and `ASKY?` — prompt,
+read, convert, in one word each. `ASK#` returns a flag beside the number
+and does not loop until the answer is valid: a word that will not give up
+is a word you cannot get out of, and this machine has no interrupt key.
+
 A word that is neither defined nor a number is offered to the **autoload
 hook** before it becomes an error: if the system disk carries `WORD.FTH`,
 that file is loaded — from either drive — and announces itself; the line is
