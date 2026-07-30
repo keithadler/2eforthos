@@ -272,15 +272,14 @@ VARIABLE FFA VARIABLE FFL VARIABLE FFI
   DUP CATENT 6 + 30 TYPE SPACE
   DUP CATENT C@ FTYPE EMIT SPACE
   CATENT 1+ C@ 3 .R ;
-\ Twenty entries a screenful, then wait -- the Programs disk outgrew the
-\ screen and the top of the catalog was scrolling away.  Any key turns
-\ the page, Q stops early, and a catalog that fits never pauses at all.
-: CPAGE ( i -- f )
-  1+ DUP 20 MOD 0= SWAP NFILE @ < AND IF
-    ." --MORE--" BEGIN KEY? UNTIL KEYC CR 81 = ELSE 0 THEN ;
+\ A paging CAT was tried and taken out again: pausing inside the loop
+\ made CAT restart from its header instead of resuming, over and over,
+\ and a catalog that can loop is worse than one that scrolls.  The list
+\ needs paging -- the Programs disk is 28 files -- but it needs it done
+\ properly, outside the DO loop that prints it.
 : CAT
   ."  #  NAME                           T SIZ" CR
-  NFILE @ 0 DO I .ENT CR I CPAGE IF LEAVE THEN LOOP
+  NFILE @ 0 DO I .ENT CR LOOP
   NFREE @ . ." SECTORS FREE" CR ;
 
 \ --- the file commands -----------------------------------------------------
@@ -683,6 +682,21 @@ VARIABLE LTOP
 \ rest of the line is abandoned while the file streams in and announces
 \ itself; typed again, the word exists.  The kernel calls this through
 \ the 'NF vector, set at the end of this file.
+\ --- decimal numbers, and why they are not here ----------------------------
+\ 3.14159 at the prompt was written, worked, and had to come out again.
+\ The parser is Forth, so it compiled into the language card, and the card
+\ had a few hundred bytes left: adding it put LATEST at $FF44, and a
+\ dictionary that close to its ceiling stopped being a dictionary --
+\ words as ordinary as / and MOD went missing and */ ran into the
+\ monitor.  The guard in CheckDP catches DP crossing $FFF0, but the
+\ damage here arrives before that, in the pressure a nearly-full card
+\ puts on everything compiled after it.
+\
+\ The feature is right and the place is wrong.  It belongs in the
+\ kernel's own Number routine, in assembly, in main memory -- which is
+\ affordable only once PICSAVE stops needing sixteen contiguous
+\ kilobytes.  Until then S>F is how you make a float.
+
 VARIABLE NFL VARIABLE NFA VARIABLE NFD
 VARIABLE NF2NO                          \ drive 2 already failed to answer
 : AUTOLOAD ( addr len -- f )

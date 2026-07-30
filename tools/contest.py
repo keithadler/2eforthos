@@ -1216,8 +1216,6 @@ TESTS = {
     clear
     type MENU
     wait 900
-    type 
-    wait 900
     type 99
     wait 900
     depth 0
@@ -1261,10 +1259,57 @@ TESTS = {
     stack -1
 """,
 
-# The autoload hook: an unknown word whose name matches a WORD.FTH on the
-# system disk loads it -- from either drive -- and an unknown word that
-# matches nothing still just gets its question mark.  MORE pages file 13
-# on drive 2 the way a person would try it cold.
+
+# The string words, loaded by naming them.  A string here is an address
+# and a length -- what S" leaves and TYPE takes.
+"strings-lib": """
+    type STR
+    wait 6000
+    clear
+    type S" HELLO WORLD" 6 5 SUB S" WORLD" S=
+    stack -1
+    clear
+    type S" HELLO" 3 LEFT NIP
+    stack 3
+    clear
+    type S" HELLO" 2 RIGHT NIP
+    stack 2
+    clear
+    type S" ABCDE" 67 SCAN
+    stack 2
+    clear
+    type S" ABCDE" 90 SCAN
+    stack -1
+    clear
+    type S" A,BC" 44 SPLIT 2DROP NIP
+    stack 1
+    clear
+    type S" -42" S>N
+    stack -1 -42
+    clear
+    type S" 4Q" S>N
+    stack 0 0
+    clear
+    type 42 N>S S" 42" S=
+    stack -1
+    clear
+    type S" hi" 2DUP UPPER S" HI" S=
+    stack -1
+    clear
+    type S" HELLO" 0 SBUF SCOPY 2DROP 0 SBUF C@
+    stack 72
+    clear
+    type S" AB" 0 SBUF SCOPY S" CD" 1 SBUF SCAT NIP
+    stack 4
+    clear
+    type 1 SBUF 4 S" ABCD" S=
+    stack -1
+    clear
+    type S"   PAD   " TRIM NIP
+    stack 3
+""",
+
+
 "autoload": """
     wait 300
     type 2 DRIVE
@@ -1285,8 +1330,6 @@ TESTS = {
     wait 900
     type MENU
     wait 4800
-    type 
-    wait 900
     clear
     type S" 12" MNUM
     stack -1 12
@@ -1928,6 +1971,55 @@ TESTS = {
     wait 900
     type ENTRIES
     wait 1200
+    shot
+""",
+
+# The tools and the language features that had no picture.  Each is a
+# console session a person could have typed.
+"shot-menu": """
+    wait 300
+    type MENU
+    wait 6000
+    type MENU
+    wait 4200
+    shot
+""",
+
+"shot-help": """
+    wait 300
+    type HELP HXOR
+    wait 4800
+    type HELP SUB
+    wait 2400
+    shot
+""",
+
+"shot-strings": """
+    wait 300
+    type STR
+    wait 6000
+    clear
+    type S" HELLO WORLD" 6 5 SUB TYPE
+    type S" hello there" 2DUP UPPER TYPE
+    type S" A,B,C" 44 SPLIT TYPE SPACE TYPE
+    type S" 42" S>N . .
+    type S" 4Q" S>N . .
+    type S"    PADDED   " TRIM TYPE
+    wait 1200
+    shot
+""",
+
+"shot-drives": """
+    wait 300
+    type RAMDISK
+    wait 6000
+    type 3 DRIVE
+    wait 6000
+    type S" : FAST 99 ;" SAVE
+    type Q.FTH
+    wait 3000
+    type CAT
+    wait 2400
     shot
 """,
 
